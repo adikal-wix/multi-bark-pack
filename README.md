@@ -1,5 +1,7 @@
 # multi-bark-pack
 
+> **Forked from [bark-pack](https://github.com/KobiAms-Wix/bark-pack) by [KobiAms-Wix](https://github.com/KobiAms-Wix)**
+
 Multi-platform, multi-backend AI agent swarm. Send a message in WhatsApp, Telegram, or Slack and get a persistent coding agent ("pup") that lives in a tmux session on your machine. Supports multiple LLM backends: Claude Code, Cursor, and more. Each pup remembers its full conversation history across messages and survives restarts.
 
 > **Platform note:** multi-bark-pack is developed and tested on macOS with Homebrew. Linux should work but paths may differ. Contributions welcome.
