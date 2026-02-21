@@ -684,6 +684,311 @@
         }
 
         /* ═══════════════════════════════════════════════════════════════
+           TABS
+           ═══════════════════════════════════════════════════════════════ */
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 32px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tab {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            transition: all 0.15s ease;
+        }
+
+        .tab:hover {
+            color: var(--text);
+            background: var(--bg-panel);
+        }
+
+        .tab.active {
+            color: var(--phosphor);
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--phosphor);
+            box-shadow: 0 0 8px var(--phosphor);
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           ADMIN PANEL
+           ═══════════════════════════════════════════════════════════════ */
+        .admin-grid {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 24px;
+            min-height: 500px;
+        }
+
+        .pack-list {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .pack-list-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .pack-list-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+        }
+
+        .btn-add-pack {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-deep);
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            color: var(--phosphor);
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.1s ease;
+        }
+
+        .btn-add-pack:hover {
+            background: var(--phosphor-glow);
+            border-color: var(--phosphor);
+        }
+
+        .pack-items {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .pack-item {
+            padding: 14px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: all 0.1s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .pack-item:last-child {
+            border-bottom: none;
+        }
+
+        .pack-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .pack-item.active {
+            background: var(--phosphor-glow);
+            border-left: 3px solid var(--phosphor);
+            padding-left: 13px;
+        }
+
+        .pack-item.selected {
+            background: var(--bg-card);
+        }
+
+        .pack-active-badge {
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            background: var(--phosphor);
+            color: var(--bg-deep);
+            border-radius: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .pack-builtin-badge {
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            background: var(--border);
+            color: var(--text-dim);
+            border-radius: 2px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .pack-name {
+            flex: 1;
+            font-size: 0.9rem;
+            color: var(--text);
+        }
+
+        .pack-editor {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .pack-editor-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .pack-editor-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .pack-editor-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .pack-editor-body {
+            padding: 24px;
+        }
+
+        .pack-field {
+            margin-bottom: 20px;
+        }
+
+        .pack-field-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .pack-field-input {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            color: var(--text);
+            transition: all 0.1s ease;
+        }
+
+        .pack-field-input:focus {
+            outline: none;
+            border-color: var(--phosphor-dim);
+            box-shadow: 0 0 0 1px var(--phosphor-glow);
+        }
+
+        .pack-field-input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pack-field-textarea {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            color: var(--phosphor-text);
+            resize: vertical;
+            line-height: 1.6;
+            transition: all 0.1s ease;
+        }
+
+        .pack-field-textarea:focus {
+            outline: none;
+            border-color: var(--phosphor-dim);
+            box-shadow: 0 0 0 1px var(--phosphor-glow);
+        }
+
+        .pack-field-textarea:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pack-field-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+
+        .pack-editor-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 400px;
+            color: var(--text-muted);
+        }
+
+        .pack-editor-empty-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        .btn-activate {
+            background: var(--phosphor-glow);
+            border-color: var(--phosphor-dim);
+            color: var(--phosphor);
+        }
+
+        .btn-activate:hover {
+            background: var(--phosphor);
+            color: var(--bg-deep);
+        }
+
+        .btn-save {
+            background: var(--cyan-glow);
+            border-color: var(--cyan);
+            color: var(--cyan);
+        }
+
+        .btn-save:hover {
+            background: var(--cyan);
+            color: var(--bg-deep);
+        }
+
+        @media (max-width: 900px) {
+            .admin-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
            SCROLLBAR
            ═══════════════════════════════════════════════════════════════ */
         ::-webkit-scrollbar {
@@ -753,6 +1058,15 @@
             </div>
         </div>
 
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" data-tab="pups">Pups</button>
+            <button class="tab" data-tab="admin">Admin</button>
+        </div>
+
+        <!-- Pups Panel -->
+        <div class="tab-panel active" id="panel-pups">
+
         <!-- Active Agents Section -->
         <div class="section-header">
             <span class="section-title">Active Pups</span>
@@ -775,6 +1089,62 @@
                 <!-- Populated by JS -->
             </div>
         </div>
+
+        </div><!-- end panel-pups -->
+
+        <!-- Admin Panel -->
+        <div class="tab-panel" id="panel-admin">
+            <div class="section-header">
+                <span class="section-title">Name Packs</span>
+                <div class="section-line"></div>
+            </div>
+
+            <div class="admin-grid">
+                <div class="pack-list">
+                    <div class="pack-list-header">
+                        <span class="pack-list-title">Packs</span>
+                        <button class="btn-add-pack" id="btn-add-pack" title="Create new pack">+</button>
+                    </div>
+                    <div class="pack-items" id="pack-items">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <div class="pack-editor" id="pack-editor">
+                    <div class="pack-editor-empty" id="pack-editor-empty">
+                        <div class="pack-editor-empty-icon">📦</div>
+                        <div>Select a pack to edit</div>
+                    </div>
+                    <div id="pack-editor-content" style="display: none;">
+                        <div class="pack-editor-header">
+                            <span class="pack-editor-title" id="pack-editor-title">Pack Name</span>
+                            <div class="pack-editor-actions">
+                                <button class="btn btn-activate" id="btn-activate-pack">Activate</button>
+                                <button class="btn btn-save" id="btn-save-pack">Save</button>
+                                <button class="btn btn-delete" id="btn-delete-pack">Delete</button>
+                            </div>
+                        </div>
+                        <div class="pack-editor-body">
+                            <div class="pack-field">
+                                <label class="pack-field-label">Pack Name</label>
+                                <input type="text" class="pack-field-input" id="pack-edit-name" placeholder="My Custom Pack">
+                            </div>
+                            <div class="pack-field">
+                                <label class="pack-field-label">Names (one per line)</label>
+                                <textarea class="pack-field-textarea" id="pack-edit-names" placeholder="Chase&#10;Marshall&#10;Skye&#10;..."></textarea>
+                                <div class="pack-field-hint">Each line is one agent name. <span id="pack-names-count">0</span> names</div>
+                            </div>
+                            <div class="pack-field">
+                                <label class="pack-field-label">Adjectives (one per line)</label>
+                                <textarea class="pack-field-textarea" id="pack-edit-adjectives" placeholder="happy&#10;brave&#10;swift&#10;..."></textarea>
+                                <div class="pack-field-hint">Used with names when pool is exhausted. <span id="pack-adjectives-count">0</span> adjectives</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- Detail Modal -->
@@ -834,6 +1204,8 @@
         let backends = [];
         let selectedAgent = null;
         let ws = null;
+        let packsData = { activePack: '', packs: {} };
+        let selectedPackId = null;
 
         // ═══════════════════════════════════════════════════════════════
         // DOM ELEMENTS
@@ -846,6 +1218,17 @@
         const shelvedCount = document.getElementById('shelved-count');
         const modalOverlay = document.getElementById('modal-overlay');
         const modalClose = document.getElementById('modal-close');
+
+        // Admin elements
+        const packItems = document.getElementById('pack-items');
+        const packEditorEmpty = document.getElementById('pack-editor-empty');
+        const packEditorContent = document.getElementById('pack-editor-content');
+        const packEditorTitle = document.getElementById('pack-editor-title');
+        const packEditName = document.getElementById('pack-edit-name');
+        const packEditNames = document.getElementById('pack-edit-names');
+        const packEditAdjectives = document.getElementById('pack-edit-adjectives');
+        const packNamesCount = document.getElementById('pack-names-count');
+        const packAdjectivesCount = document.getElementById('pack-adjectives-count');
 
         // ═══════════════════════════════════════════════════════════════
         // API
@@ -895,6 +1278,88 @@
                 closeModal();
             } catch (err) {
                 console.error('Failed to delete agent:', err);
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // PACK API
+        // ═══════════════════════════════════════════════════════════════
+        async function fetchPacks() {
+            try {
+                const res = await fetch(`${API_BASE}/packs`);
+                packsData = await res.json();
+                renderPacks();
+            } catch (err) {
+                console.error('Failed to fetch packs:', err);
+            }
+        }
+
+        async function activatePack(packId) {
+            try {
+                await fetch(`${API_BASE}/packs/active`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ packId })
+                });
+                await fetchPacks();
+            } catch (err) {
+                console.error('Failed to activate pack:', err);
+            }
+        }
+
+        async function savePack(packId, updates) {
+            try {
+                const res = await fetch(`${API_BASE}/packs/${packId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updates)
+                });
+                if (!res.ok) {
+                    const data = await res.json();
+                    alert(data.error || 'Failed to save pack');
+                    return;
+                }
+                await fetchPacks();
+            } catch (err) {
+                console.error('Failed to save pack:', err);
+            }
+        }
+
+        async function createPack(pack) {
+            try {
+                const res = await fetch(`${API_BASE}/packs`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(pack)
+                });
+                if (!res.ok) {
+                    const data = await res.json();
+                    alert(data.error || 'Failed to create pack');
+                    return null;
+                }
+                const newPack = await res.json();
+                await fetchPacks();
+                return newPack;
+            } catch (err) {
+                console.error('Failed to create pack:', err);
+                return null;
+            }
+        }
+
+        async function deletePack(packId) {
+            try {
+                const res = await fetch(`${API_BASE}/packs/${packId}`, {
+                    method: 'DELETE'
+                });
+                if (!res.ok) {
+                    const data = await res.json();
+                    alert(data.error || 'Failed to delete pack');
+                    return;
+                }
+                selectedPackId = null;
+                await fetchPacks();
+            } catch (err) {
+                console.error('Failed to delete pack:', err);
             }
         }
 
@@ -952,6 +1417,10 @@
                 case 'backends':
                     backends = data.backends;
                     renderBackends();
+                    break;
+                case 'packs':
+                    packsData = data.packs;
+                    renderPacks();
                     break;
             }
         }
@@ -1094,6 +1563,167 @@
         }
 
         // ═══════════════════════════════════════════════════════════════
+        // PACK RENDER
+        // ═══════════════════════════════════════════════════════════════
+        function renderPacks() {
+            const packs = Object.values(packsData.packs || {});
+
+            packItems.innerHTML = packs.map(pack => `
+                <div class="pack-item ${pack.id === packsData.activePack ? 'active' : ''} ${pack.id === selectedPackId ? 'selected' : ''}" data-id="${pack.id}">
+                    <span class="pack-name">${pack.name}</span>
+                    ${pack.id === packsData.activePack ? '<span class="pack-active-badge">Active</span>' : ''}
+                    ${pack.builtin ? '<span class="pack-builtin-badge">Builtin</span>' : ''}
+                </div>
+            `).join('');
+
+            // Attach click events
+            document.querySelectorAll('.pack-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const packId = item.dataset.id;
+                    selectPack(packId);
+                });
+            });
+
+            // Re-select current pack if exists
+            if (selectedPackId && packsData.packs[selectedPackId]) {
+                selectPack(selectedPackId);
+            } else {
+                packEditorEmpty.style.display = 'flex';
+                packEditorContent.style.display = 'none';
+            }
+        }
+
+        function selectPack(packId) {
+            selectedPackId = packId;
+            const pack = packsData.packs[packId];
+            if (!pack) return;
+
+            // Update UI selection
+            document.querySelectorAll('.pack-item').forEach(item => {
+                item.classList.toggle('selected', item.dataset.id === packId);
+            });
+
+            // Show editor
+            packEditorEmpty.style.display = 'none';
+            packEditorContent.style.display = 'block';
+
+            // Populate editor
+            packEditorTitle.textContent = pack.name;
+            packEditName.value = pack.name;
+            packEditNames.value = (pack.names || []).join('\n');
+            packEditAdjectives.value = (pack.adjectives || []).join('\n');
+
+            // Update counts
+            updatePackCounts();
+
+            // Disable fields for builtin packs
+            const isBuiltin = pack.builtin;
+            packEditName.disabled = isBuiltin;
+            packEditNames.disabled = isBuiltin;
+            packEditAdjectives.disabled = isBuiltin;
+
+            // Update buttons
+            document.getElementById('btn-save-pack').style.display = isBuiltin ? 'none' : '';
+            document.getElementById('btn-delete-pack').style.display = isBuiltin ? 'none' : '';
+            document.getElementById('btn-activate-pack').style.display = packId === packsData.activePack ? 'none' : '';
+        }
+
+        function updatePackCounts() {
+            const names = packEditNames.value.split('\n').filter(n => n.trim());
+            const adjectives = packEditAdjectives.value.split('\n').filter(a => a.trim());
+            packNamesCount.textContent = names.length;
+            packAdjectivesCount.textContent = adjectives.length;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // TABS
+        // ═══════════════════════════════════════════════════════════════
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+
+                // Update tab buttons
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                // Update panels
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+                document.getElementById(`panel-${tabName}`).classList.add('active');
+
+                // Fetch packs when admin tab is opened
+                if (tabName === 'admin') {
+                    fetchPacks();
+                }
+            });
+        });
+
+        // ═══════════════════════════════════════════════════════════════
+        // PACK EDITOR EVENTS
+        // ═══════════════════════════════════════════════════════════════
+        packEditNames.addEventListener('input', updatePackCounts);
+        packEditAdjectives.addEventListener('input', updatePackCounts);
+
+        document.getElementById('btn-add-pack').addEventListener('click', async () => {
+            const name = prompt('Enter pack name:');
+            if (!name || !name.trim()) return;
+
+            const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            if (packsData.packs[id]) {
+                alert('A pack with this ID already exists');
+                return;
+            }
+
+            const newPack = await createPack({
+                id,
+                name: name.trim(),
+                names: ['Agent-1', 'Agent-2', 'Agent-3', 'Agent-4'],
+                adjectives: ['super', 'mega', 'ultra', 'hyper'],
+                builtin: false
+            });
+
+            if (newPack) {
+                selectedPackId = newPack.id;
+                renderPacks();
+            }
+        });
+
+        document.getElementById('btn-activate-pack').addEventListener('click', () => {
+            if (selectedPackId) {
+                activatePack(selectedPackId);
+            }
+        });
+
+        document.getElementById('btn-save-pack').addEventListener('click', () => {
+            if (!selectedPackId) return;
+            const pack = packsData.packs[selectedPackId];
+            if (!pack || pack.builtin) return;
+
+            const names = packEditNames.value.split('\n').map(n => n.trim()).filter(n => n);
+            const adjectives = packEditAdjectives.value.split('\n').map(a => a.trim()).filter(a => a);
+
+            if (names.length === 0) {
+                alert('Pack must have at least one name');
+                return;
+            }
+
+            savePack(selectedPackId, {
+                name: packEditName.value.trim() || pack.name,
+                names,
+                adjectives
+            });
+        });
+
+        document.getElementById('btn-delete-pack').addEventListener('click', () => {
+            if (!selectedPackId) return;
+            const pack = packsData.packs[selectedPackId];
+            if (!pack || pack.builtin) return;
+
+            if (confirm(`Delete pack "${pack.name}"? This cannot be undone.`)) {
+                deletePack(selectedPackId);
+            }
+        });
+
+        // ═══════════════════════════════════════════════════════════════
         // MODAL
         // ═══════════════════════════════════════════════════════════════
         function showModal(agent) {
@@ -1154,7 +1784,7 @@
         // INIT
         // ═══════════════════════════════════════════════════════════════
         async function init() {
-            await Promise.all([fetchAgents(), fetchBackends()]);
+            await Promise.all([fetchAgents(), fetchBackends(), fetchPacks()]);
             connectWebSocket();
         }
 

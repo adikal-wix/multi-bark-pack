@@ -45,6 +45,7 @@ mkdirSync(PROJECTS_DIR, { recursive: true });
 const AGENTS_FILE = path.join(__dirname, 'agents.json');
 const ROUTING_FILE = path.join(__dirname, 'routing.json');
 const STATUS_FILE = path.join(__dirname, 'status.json');
+const PACKS_FILE = path.join(__dirname, 'packs.json');
 
 // --- Voice transcription via whisper.cpp (local, free) ---
 function transcribeAudio(audioFilePath) {
@@ -67,24 +68,84 @@ function transcribeAudio(audioFilePath) {
     }
 }
 
-// --- Pup Names (Paw Patrol inspired) ---
-const PUP_NAMES = [
-    'Chase', 'Marshall', 'Skye', 'Rocky', 'Rubble', 'Zuma', 'Everest', 'Tracker',
-    'Rex', 'Liberty', 'Tuck', 'Ella', 'Wild', 'Shade', 'Gasket', 'Arrby',
-    'Robo-Dog', 'Sweetie', 'Coral', 'Cap', 'Al', 'Ryder', 'Sparks', 'Bolt',
-    'Dash', 'Pepper', 'Blaze', 'Scout', 'Bandit', 'Wren', 'Ziggy', 'Nova',
-];
-
-const ADJECTIVES = [
-    'happy', 'jumpy', 'brave', 'sneaky', 'zippy', 'dizzy', 'fuzzy', 'mighty',
-    'swift', 'lucky', 'bouncy', 'sleepy', 'wild', 'silly', 'goofy', 'turbo',
-    'cosmic', 'chill', 'spicy', 'blazing', 'gentle', 'fierce', 'golden', 'shadow',
-    'tiny', 'mega', 'ultra', 'hyper', 'super', 'frosty', 'stormy', 'sunny',
-];
-
+// --- Name Packs ---
+let packsData = { activePack: 'paw-patrol', packs: {} };
 let pupBaseIndex = 0;
 
+function loadPacks() {
+    if (existsSync(PACKS_FILE)) {
+        try {
+            packsData = JSON.parse(readFileSync(PACKS_FILE, 'utf8'));
+            console.log(`  Loaded ${Object.keys(packsData.packs).length} packs, active: ${packsData.activePack}`);
+        } catch (e) {
+            console.log(`  ⚠️ Could not load packs: ${e.message}`);
+        }
+    }
+}
+
+function savePacks() {
+    writeFileSync(PACKS_FILE, JSON.stringify(packsData, null, 2));
+    broadcastPacks();
+}
+
+function getActivePack() {
+    return packsData.packs[packsData.activePack] || Object.values(packsData.packs)[0];
+}
+
+function getPacks() {
+    return packsData;
+}
+
+function setActivePack(packId) {
+    if (!packsData.packs[packId]) return false;
+    packsData.activePack = packId;
+    pupBaseIndex = 0; // Reset index when switching packs
+    savePacks();
+    return true;
+}
+
+function createPack(pack) {
+    if (!pack.id || !pack.name || !pack.names || !pack.adjectives) return null;
+    if (packsData.packs[pack.id]) return null; // Already exists
+    packsData.packs[pack.id] = { ...pack, builtin: false };
+    savePacks();
+    return packsData.packs[pack.id];
+}
+
+function updatePack(packId, updates) {
+    if (!packsData.packs[packId]) return null;
+    // Can't change id or builtin status
+    const { id, builtin, ...allowed } = updates;
+    Object.assign(packsData.packs[packId], allowed);
+    savePacks();
+    return packsData.packs[packId];
+}
+
+function deletePack(packId) {
+    const pack = packsData.packs[packId];
+    if (!pack || pack.builtin) return false; // Can't delete builtin packs
+    delete packsData.packs[packId];
+    if (packsData.activePack === packId) {
+        packsData.activePack = Object.keys(packsData.packs)[0] || 'paw-patrol';
+    }
+    savePacks();
+    return true;
+}
+
+function broadcastPacks() {
+    if (typeof broadcastAgents === 'function' && wsClients && wsClients.size > 0) {
+        const msg = JSON.stringify({ type: 'packs', packs: packsData });
+        for (const ws of wsClients) {
+            try { ws.send(msg); } catch {}
+        }
+    }
+}
+
 function nextPupName() {
+    const pack = getActivePack();
+    const names = pack?.names || [];
+    const adjectives = pack?.adjectives || [];
+
     // Collect all names currently in use (active + deleted)
     const usedNames = new Set([
         ...[...agents.values()].map(a => a.name),
@@ -92,24 +153,24 @@ function nextPupName() {
     ]);
 
     // Try each base name starting from pupBaseIndex
-    for (let i = 0; i < PUP_NAMES.length; i++) {
-        const base = PUP_NAMES[(pupBaseIndex + i) % PUP_NAMES.length];
+    for (let i = 0; i < names.length; i++) {
+        const base = names[(pupBaseIndex + i) % names.length];
         if (!usedNames.has(base)) {
-            pupBaseIndex = (pupBaseIndex + i + 1) % PUP_NAMES.length;
+            pupBaseIndex = (pupBaseIndex + i + 1) % names.length;
             return base;
         }
     }
 
     // All bare names taken — pick a random adjective + random base
     for (let attempt = 0; attempt < 200; attempt++) {
-        const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
-        const base = PUP_NAMES[Math.floor(Math.random() * PUP_NAMES.length)];
+        const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+        const base = names[Math.floor(Math.random() * names.length)];
         const name = `${adj}-${base}`;
         if (!usedNames.has(name)) return name;
     }
 
-    // Absolute fallback (32 adj x 32 names = 1024 combos)
-    return `pup-${crypto.randomBytes(3).toString('hex')}`;
+    // Absolute fallback
+    return `agent-${crypto.randomBytes(3).toString('hex')}`;
 }
 
 // --- Agent State ---
@@ -163,6 +224,51 @@ app.get('/api/backends', async (req, res) => {
         results.push({ ...b, installed: true, version });
     }
     res.json(results);
+});
+
+// REST API: Packs
+app.get('/api/packs', (req, res) => {
+    res.json(getPacks());
+});
+
+app.get('/api/packs/active', (req, res) => {
+    res.json(getActivePack());
+});
+
+app.put('/api/packs/active', (req, res) => {
+    const { packId } = req.body;
+    if (!packId) return res.status(400).json({ error: 'packId required' });
+    if (setActivePack(packId)) {
+        res.json({ success: true, activePack: packId });
+    } else {
+        res.status(404).json({ error: 'Pack not found' });
+    }
+});
+
+app.post('/api/packs', (req, res) => {
+    const pack = createPack(req.body);
+    if (pack) {
+        res.json(pack);
+    } else {
+        res.status(400).json({ error: 'Invalid pack or ID already exists' });
+    }
+});
+
+app.put('/api/packs/:id', (req, res) => {
+    const pack = updatePack(req.params.id, req.body);
+    if (pack) {
+        res.json(pack);
+    } else {
+        res.status(404).json({ error: 'Pack not found' });
+    }
+});
+
+app.delete('/api/packs/:id', (req, res) => {
+    if (deletePack(req.params.id)) {
+        res.json({ success: true });
+    } else {
+        res.status(400).json({ error: 'Pack not found or is builtin' });
+    }
 });
 
 // REST API: Stop agent
@@ -1577,6 +1683,7 @@ process.on('SIGTERM', () => process.kill(process.pid, 'SIGINT'));
 async function main() {
     console.log('Starting multi-bark-pack...');
     loadState();
+    loadPacks();
 
     // Initialize backends
     console.log('Initializing backends...');
@@ -1692,6 +1799,16 @@ module.exports = {
     broadcastAgents,
     httpServer,
     app,
+
+    // Packs
+    loadPacks,
+    savePacks,
+    getPacks,
+    getActivePack,
+    setActivePack,
+    createPack,
+    updatePack,
+    deletePack,
 };
 
 // Only run main() when executed directly (not when required as module)

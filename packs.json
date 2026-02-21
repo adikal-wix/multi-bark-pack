@@ -1,0 +1,56 @@
+{
+  "activePack": "paw-patrol",
+  "packs": {
+    "paw-patrol": {
+      "id": "paw-patrol",
+      "name": "Paw Patrol",
+      "names": [
+        "Chase", "Marshall", "Skye", "Rocky", "Rubble", "Zuma", "Everest", "Tracker",
+        "Rex", "Liberty", "Tuck", "Ella", "Wild", "Shade", "Gasket", "Arrby",
+        "Robo-Dog", "Sweetie", "Coral", "Cap", "Al", "Ryder", "Sparks", "Bolt",
+        "Dash", "Pepper", "Blaze", "Scout", "Bandit", "Wren", "Ziggy", "Nova"
+      ],
+      "adjectives": [
+        "happy", "jumpy", "brave", "sneaky", "zippy", "dizzy", "fuzzy", "mighty",
+        "swift", "lucky", "bouncy", "sleepy", "wild", "silly", "goofy", "turbo",
+        "cosmic", "chill", "spicy", "blazing", "gentle", "fierce", "golden", "shadow",
+        "tiny", "mega", "ultra", "hyper", "super", "frosty", "stormy", "sunny"
+      ],
+      "builtin": true
+    },
+    "mario-kart": {
+      "id": "mario-kart",
+      "name": "Mario Kart",
+      "names": [
+        "Mario", "Luigi", "Peach", "Yoshi", "Toad", "Bowser", "DK", "Wario",
+        "Waluigi", "Daisy", "Rosalina", "Toadette", "Koopa", "Lakitu", "Shy-Guy", "Birdo",
+        "Diddy", "Funky", "King-Boo", "Dry-Bones", "Baby-Mario", "Baby-Luigi", "Iggy", "Ludwig",
+        "Lemmy", "Roy", "Wendy", "Morton", "Larry", "Kamek", "Pauline", "Nabbit"
+      ],
+      "adjectives": [
+        "super", "turbo", "mega", "ultra", "hyper", "cosmic", "golden", "star",
+        "nitro", "boost", "rocket", "thunder", "fire", "ice", "rainbow", "lightning",
+        "speedy", "drift", "power", "lucky", "champion", "royal", "mighty", "blazing",
+        "shadow", "phantom", "wild", "crazy", "wicked", "epic", "stellar", "supreme"
+      ],
+      "builtin": true
+    },
+    "pokemon": {
+      "id": "pokemon",
+      "name": "Pokemon",
+      "names": [
+        "Pikachu", "Charizard", "Bulbasaur", "Squirtle", "Eevee", "Mewtwo", "Gengar", "Snorlax",
+        "Jigglypuff", "Gyarados", "Dragonite", "Alakazam", "Machamp", "Lapras", "Vaporeon", "Flareon",
+        "Jolteon", "Umbreon", "Espeon", "Lucario", "Garchomp", "Greninja", "Mimikyu", "Rayquaza",
+        "Mew", "Celebi", "Darkrai", "Arceus", "Zoroark", "Sylveon", "Gardevoir", "Metagross"
+      ],
+      "adjectives": [
+        "shiny", "shadow", "mega", "ultra", "alpha", "ancient", "primal", "legendary",
+        "mystic", "cosmic", "stellar", "radiant", "phantom", "crystal", "thunder", "flame",
+        "aqua", "terra", "aero", "psychic", "dark", "fairy", "dragon", "steel",
+        "swift", "brave", "timid", "jolly", "adamant", "modest", "calm", "bold"
+      ],
+      "builtin": true
+    }
+  }
+}
