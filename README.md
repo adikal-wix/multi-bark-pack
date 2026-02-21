@@ -9,8 +9,11 @@ Multi-platform, multi-backend AI agent swarm. Send a message in WhatsApp, Telegr
 | Backend | Status | CLI | Session Persistence |
 |---------|--------|-----|---------------------|
 | Claude Code | ✅ Active | `claude` | ✅ |
-| Cursor | 🔜 Planned | `agent` | ✅ |
-| OpenAI Codex | 🔜 Planned | TBD | TBD |
+| Cursor | ✅ Active | `cursor` | ✅ |
+| OpenAI Codex | ✅ Active | `codex` | ✅ |
+| Google Gemini | ✅ Active | `gemini` | ✅ |
+
+All backends support automatic failover — if one fails, bark-pack can switch to another while preserving conversation context.
 
 ## How it works
 
@@ -80,11 +83,33 @@ claude --version
 
 **Cursor (optional):**
 ```bash
-# Install via the Cursor CLI installer
-curl https://cursor.com/install -fsS | bash
+# Install via the Cursor app or CLI installer
+# Verify it works
+cursor --version
+```
+
+**OpenAI Codex (optional):**
+```bash
+# Install globally
+npm install -g @openai/codex
 
 # Verify it works
-agent --help
+codex --version
+```
+
+**Google Gemini (optional):**
+```bash
+# Install globally
+npm install -g @anthropic-ai/gemini-cli
+
+# Verify it works
+gemini --version
+```
+
+Configure which backends are enabled in `.env`:
+```env
+DEFAULT_BACKEND=claude-code
+ENABLED_BACKENDS=claude-code,cursor,codex,gemini
 ```
 
 ### 5. ffmpeg + whisper.cpp (optional — for voice messages)
@@ -388,6 +413,7 @@ Messages are routed by priority:
 |---------|-------------|
 | `/help` | Show command list |
 | `/status` | Refresh the pinned status message |
+| `/backends` | Show available LLM backends and their status |
 | `/daily` | Request a one-line standup from every pup |
 | `/stop name` | Stop a running pup (sends Ctrl+C) |
 | `/stop pack` | Stop all running pups |
@@ -419,6 +445,53 @@ The model persists for that pup until you change it again.
 ### Voice messages
 
 Send a voice message in the chat and bark-pack transcribes it locally using whisper.cpp, then routes the text to a pup. Requires ffmpeg and whisper.cpp (see prerequisites).
+
+### Name packs
+
+Pups get names from configurable "name packs". The default pack is Paw Patrol (Chase, Marshall, Skye...). Built-in packs include:
+
+| Pack | Theme | Icon |
+|------|-------|------|
+| Paw Patrol | Rescue pups | 🐾 |
+| Mario Kart | Racing characters | 🍄 |
+| Pokemon | Starter Pokemon | ⚡ |
+| Israeli Ministers | Government officials | 🇮🇱 |
+
+Each pack has 32 names and 32 adjectives (1,024 combinations). Switch packs or create custom ones via the Admin UI.
+
+### Admin UI dashboard
+
+bark-pack includes a web dashboard for managing pups and configuration.
+
+```bash
+# Default: http://localhost:3333
+```
+
+Features:
+- Live agent status with backend indicators
+- Start/stop/clear/delete agents
+- View agent details (session ID, working directory, history)
+- Manage name packs (view, edit, create custom packs)
+- Backend status overview
+
+Set `UI_PORT` in `.env` to change the port.
+
+### Agent fallback
+
+When a pup hits an error (context window full, rate limit, timeout, crash), bark-pack automatically recovers:
+
+1. **Retry** — Wait with exponential backoff, retry same session
+2. **Reset** — New session on same backend with context injected
+3. **Switch** — Switch to different backend with context injected
+
+Context is preserved via server-side conversation history. Each turn is tracked and can be replayed into a new session if needed. Configure via:
+
+```env
+FALLBACK_ENABLED=true
+AGENT_TIMEOUT=600000           # 10 min timeout
+FALLBACK_MAX_RETRIES=3
+FALLBACK_BACKEND_PRIORITY=claude-code,cursor,codex,gemini
+```
 
 ### Watching pups work in real-time
 
@@ -529,9 +602,24 @@ multi-bark-pack/
   backends/           LLM agent backends
     index.js          Backend registry and initialization
     claude-code.js    Claude Code CLI backend
+    cursor.js         Cursor CLI backend
+    codex.js          OpenAI Codex CLI backend
+    gemini.js         Google Gemini CLI backend
   stream-parsers/     Output format handlers
     index.js          Parser registry
     claude.js         Claude stream-json parser
+  history/            Server-side conversation tracking
+    index.js          History manager API
+    storage.js        JSON file storage per agent
+    summarizer.js     Context prompt building
+  fallback/           Automatic agent recovery
+    index.js          Fallback orchestrator
+    detector.js       Failure classification
+    injector.js       Context injection
+    config.js         Configuration
+  ui/                 Admin web dashboard
+    index.html        Dashboard UI
+  packs.json          Name pack definitions
   projects/           Where pups clone repos (auto-created, gitignored)
   .bark-tmp/          Runtime state files (auto-created, gitignored)
   .env                Your configuration (not committed — copy from .env.example)
