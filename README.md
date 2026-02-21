@@ -414,6 +414,8 @@ Messages are routed by priority:
 | `/help` | Show command list |
 | `/status` | Refresh the pinned status message |
 | `/backends` | Show available LLM backends and their status |
+| `/skills` | Show available cross-backend skills |
+| `/skill name @pup` | Add a skill to a pup |
 | `/daily` | Request a one-line standup from every pup |
 | `/stop name` | Stop a running pup (sends Ctrl+C) |
 | `/stop pack` | Stop all running pups |
@@ -475,6 +477,28 @@ Features:
 - Backend status overview
 
 Set `UI_PORT` in `.env` to change the port.
+
+### Cross-backend skills
+
+Skills are reusable prompt modules that work across all backends. They're loaded once at server startup for zero runtime overhead.
+
+```bash
+/skills                    # List available skills
+/skill developer @Chase    # Add developer skill to Chase
+```
+
+Built-in skills:
+
+| Skill | Description | ~Tokens |
+|-------|-------------|---------|
+| `developer` | Senior developer mode - implementation focus | 342 |
+| `reviewer` | Code review mode - bugs, security, maintainability | 374 |
+| `architect` | System design mode - patterns, scalability | 685 |
+| `product` | Product manager mode - user focus, requirements | 405 |
+| `debug` | Debug mode - hypothesis-driven investigation | 420 |
+| `add-backend` | Scaffold a new LLM backend | 867 |
+
+Skills are stored in `.claude/skills/` as SKILL.md files (YAML frontmatter + markdown). Create custom skills by adding new directories there.
 
 ### Agent fallback
 
@@ -617,6 +641,10 @@ multi-bark-pack/
     detector.js       Failure classification
     injector.js       Context injection
     config.js         Configuration
+  skills/             Cross-backend skill system
+    index.js          Skills manager (loads at startup)
+    parser.js         SKILL.md parser
+  .claude/skills/     Skill definitions (SKILL.md files)
   ui/                 Admin web dashboard
     index.html        Dashboard UI
   packs.json          Name pack definitions

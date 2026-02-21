@@ -5,6 +5,7 @@ const { createSlackAdapter } = require('./adapters/slack');
 const backends = require('./backends');
 const historyManager = require('./history');
 const fallbackManager = require('./fallback');
+const skillsManager = require('./skills');
 const { exec, execSync } = require('child_process');
 const { writeFileSync, readFileSync, existsSync, mkdirSync, unlinkSync, readdirSync } = require('fs');
 const crypto = require('crypto');
@@ -573,7 +574,16 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
 
     // Build system prompt
     const sysPromptFile = path.join(TMP_DIR, `${agent.id}.sysprompt`);
-    const systemPrompt = `You are ${agent.name}, a bark-pack pup. All repo work must happen inside ${PROJECTS_DIR}/ — always clone there, even if the repo exists elsewhere on this machine. Reuse existing clones inside ${PROJECTS_DIR}/ (git pull to update). Never reference or modify repos outside of ${PROJECTS_DIR}/. Work on projects using absolute paths from ${PROJECTS_DIR}/ — do NOT cd into them before running commands. When you start working in a project directory, write its absolute path to ${cwdFile} so the server can track it. To send files to the user, copy them to ${sendDir}/. Sign commits with: 🐾 Paw-Printed-By: ${agent.name} <${agent.name.toLowerCase()}@bark-pack>`;
+    let systemPrompt = `You are ${agent.name}, a bark-pack pup. All repo work must happen inside ${PROJECTS_DIR}/ — always clone there, even if the repo exists elsewhere on this machine. Reuse existing clones inside ${PROJECTS_DIR}/ (git pull to update). Never reference or modify repos outside of ${PROJECTS_DIR}/. Work on projects using absolute paths from ${PROJECTS_DIR}/ — do NOT cd into them before running commands. When you start working in a project directory, write its absolute path to ${cwdFile} so the server can track it. To send files to the user, copy them to ${sendDir}/. Sign commits with: 🐾 Paw-Printed-By: ${agent.name} <${agent.name.toLowerCase()}@bark-pack>`;
+
+    // Append skill content if agent has skills (only on first message)
+    if (!isResume && agent.skills && agent.skills.length > 0) {
+        const skillContent = skillsManager.buildSkillPrompt(agent.skills);
+        if (skillContent) {
+            systemPrompt += skillContent;
+            console.log(`  ⚡ Injecting skills for ${agent.name}: ${agent.skills.join(', ')}`);
+        }
+    }
     writeFileSync(sysPromptFile, systemPrompt);
 
     // For backends that don't support system prompts, prepend to first message
@@ -1363,6 +1373,8 @@ async function onMessage(msg) {
                 '*Commands:*\n' +
                 '`/status` — show pack status\n' +
                 '`/backends` — show available LLM backends\n' +
+                '`/skills` — show available skills\n' +
+                '`/skill name @pup` — add skill to pup\n' +
                 '`/stop name` — stop a running pup\n' +
                 '`/clear name` — shelve pup (can /reborn)\n' +
                 '`/delete name` — permanently remove pup\n' +
@@ -1392,6 +1404,54 @@ async function onMessage(msg) {
         }
         if (command === '/backends') {
             await adapter.send(backends.formatCapabilityMatrix());
+            return;
+        }
+        if (command === '/skills') {
+            await adapter.send(skillsManager.formatList());
+            return;
+        }
+        if (command === '/skill') {
+            const args = body.split(/\s+/).slice(1);
+            const skillName = args[0]?.replace(/^\//, '');  // Handle /skill /developer or /skill developer
+            const pupName = args[1]?.replace(/^@/, '');
+
+            if (!skillName) {
+                await adapter.send('Usage: `/skill <skill-name> [@pup]`\n\nUse `/skills` to see available skills.');
+                return;
+            }
+
+            if (!skillsManager.has(skillName)) {
+                await adapter.send(`Unknown skill: \`${skillName}\`\n\nUse \`/skills\` to see available skills.`);
+                return;
+            }
+
+            // If pup name specified, add skill to that pup
+            if (pupName) {
+                const agent = findAgentByName(pupName);
+                if (!agent) {
+                    await adapter.send(`Pup *${pupName}* not found.`);
+                    return;
+                }
+                agent.skills = agent.skills || [];
+                if (agent.skills.includes(skillName)) {
+                    await adapter.send(`*${agent.name}* already has the \`${skillName}\` skill.`);
+                    return;
+                }
+                agent.skills.push(skillName);
+                saveState();
+                const skill = skillsManager.get(skillName);
+                await adapter.send(`⚡ Added \`${skillName}\` to *${agent.name}*\n_${skill.description}_\n\n_Skill will apply on next message (new session)._`);
+                return;
+            }
+
+            // No pup specified - show skill info
+            const skill = skillsManager.get(skillName);
+            await adapter.send(
+                `*${skill.name}*\n` +
+                `_${skill.description}_\n\n` +
+                `Tokens: ~${skill.tokens}\n\n` +
+                `Usage: \`/skill ${skillName} @pup\` to add to a pup`
+            );
             return;
         }
         if (command === '/losts') {
@@ -1790,6 +1850,10 @@ async function main() {
         enabledBackends: ENABLED_BACKENDS,
         defaultBackend: DEFAULT_BACKEND,
     });
+
+    // Initialize skills (load once at startup)
+    console.log('Loading skills...');
+    skillsManager.initialize();
 
     // Start Management UI HTTP server immediately (before adapters)
     httpServer.listen(UI_PORT, () => {

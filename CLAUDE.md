@@ -35,6 +35,10 @@ Node.js, whatsapp-web.js, @slack/web-api, @slack/socket-mode, tmux, whisper.cpp 
   - `detector.js` — Failure classification
   - `injector.js` — Context injection
   - `config.js` — Configuration
+- `skills/` — Cross-backend skill system
+  - `index.js` — Skills manager (loads once at startup)
+  - `parser.js` — SKILL.md parser (YAML frontmatter + markdown)
+- `.claude/skills/` — Skill definitions (Claude Code compatible)
 - `start.sh` — Auto-restart wrapper: exits 0 → restarts, non-zero → stops
 - `agents.json` — Runtime state: active + soft-deleted agents (gitignored)
 - `routing.json` — Message ID → agent ID map, all platforms (gitignored)
@@ -57,6 +61,8 @@ tmux attach -t bark-Chase  # Watch a specific pup work
 
 - `/status` — refresh pinned status message
 - `/backends` — show available LLM backends and capabilities
+- `/skills` — show available skills (cross-backend)
+- `/skill name @pup` — add a skill to a pup
 - `/stop name` — stop a running pup (sends Ctrl+C)
 - `/stop pack` — stop all running pups
 - `/clear name` — shelve pup (deactivate, can `/reborn`)
