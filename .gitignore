@@ -6,7 +6,6 @@ package-lock.json
 agents.json
 routing.json
 status.json
-docs/
 projects/
 .env
 tools-registry.json
