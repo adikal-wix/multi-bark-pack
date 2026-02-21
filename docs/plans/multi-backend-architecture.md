@@ -258,6 +258,20 @@ backends
 1. Add `/backends` command
 2. Graceful degradation for missing capabilities
 
+### Phase 5a: Codex Backend ✅
+1. Implement `backends/codex.js`
+2. Implement `stream-parsers/codex.js`
+3. CLI: `codex exec --json`
+4. Session resume via thread_id
+5. Models: gpt-5.3-codex, o3, o4-mini
+
+### Phase 5b: Gemini Backend ✅
+1. Implement `backends/gemini.js`
+2. Implement `stream-parsers/gemini.js`
+3. CLI: `gemini -y --output-format stream-json`
+4. Session resume via UUID
+5. Models: auto-gemini-2.5, gemini-2.5-pro, gemini-2.5-flash
+
 ## Resolved Questions
 
 1. **Cursor stream-json format**: Different from Claude's - has `type: "thinking"`, `type: "tool_call"`, `type: "assistant"`, `type: "result"` structure
@@ -272,8 +286,10 @@ backends
 - Show which backends are online/offline
 
 ### Add more backends
-- OpenAI Codex CLI
-- Google Antigravity
+- ✅ OpenAI Codex CLI (Phase 5a)
+- ✅ Google Gemini CLI (Phase 5b)
+- Aider (open source)
+- Continue (has API)
 - Other agent CLIs as they become available
 
 ### Token/cost tracking per backend
