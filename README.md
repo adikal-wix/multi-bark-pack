@@ -146,6 +146,15 @@ You only need **one** platform to get started. Pick whichever you already use.
 
 `yarn start` runs `start.sh`, which auto-restarts the server on clean exit (e.g. `/restart` command). A non-zero exit (crash or `/shutdown`) stops for real.
 
+### For Wix employees
+
+If you have access to Wix's internal npm registry, run this before `yarn install`:
+
+```bash
+./scripts/use-wix-registry.sh
+yarn install
+```
+
 ---
 
 ## Platform setup guides
