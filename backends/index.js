@@ -5,11 +5,15 @@
 
 const createClaudeCodeBackend = require('./claude-code');
 const createCursorBackend = require('./cursor');
+const createCodexBackend = require('./codex');
+const createGeminiBackend = require('./gemini');
 
 // Backend factory functions
 const backendFactories = {
     'claude-code': createClaudeCodeBackend,
     'cursor': createCursorBackend,
+    'codex': createCodexBackend,
+    'gemini': createGeminiBackend,
 };
 
 // Instantiated backends (cached)

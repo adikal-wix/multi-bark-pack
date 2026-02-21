@@ -176,25 +176,70 @@ Surface backend differences clearly.
 
 ---
 
-### Phase 5: Additional Backends
-Expand backend support.
+### Phase 5a: Codex Backend
+Add OpenAI Codex CLI as a backend.
+
+**Research completed:**
+- [x] CLI: `codex` (v0.104.0)
+- [x] Non-interactive mode: `codex exec --json`
+- [x] Auto-approve: `--dangerously-bypass-approvals-and-sandbox`
+- [x] Session resume: `codex exec resume --last` or by thread_id
+- [x] Models: gpt-5.3-codex, o3, etc.
+
+**Deliverables:**
+- [x] `backends/codex.js` implemented
+- [x] `stream-parsers/codex.js` implemented
+- [x] Registered in backend and parser registries
+
+**JSON format:**
+```json
+{"type":"thread.started","thread_id":"..."}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"type":"reasoning","text":"..."}}
+{"type":"item.completed","item":{"type":"agent_message","text":"..."}}
+{"type":"turn.completed","usage":{...}}
+```
+
+**Status:** ✅ Complete
+
+---
+
+### Phase 5b: Gemini Backend
+Add Google Gemini CLI as a backend.
+
+**Research completed:**
+- [x] CLI: `gemini` (v0.24.4)
+- [x] Non-interactive mode: `--output-format stream-json`
+- [x] Auto-approve: `-y` / `--yolo`
+- [x] Session resume: `--resume <index>` or `--resume latest`
+- [x] Models: auto-gemini-2.5, etc.
+
+**Deliverables:**
+- [x] `backends/gemini.js` implemented
+- [x] `stream-parsers/gemini.js` implemented
+- [x] Registered in backend and parser registries
+
+**JSON format:**
+```json
+{"type":"init","session_id":"...","model":"..."}
+{"type":"message","role":"user","content":"..."}
+{"type":"tool_use","tool_name":"...","tool_id":"...","parameters":{}}
+{"type":"tool_result","tool_id":"...","status":"...","output":"..."}
+{"type":"message","role":"assistant","content":"...","delta":true}
+{"type":"result","status":"...","stats":{...}}
+```
+
+**Status:** ✅ Complete
+
+---
+
+### Phase 5c: Future Backends (Optional)
+Additional backend candidates for later.
 
 **Candidates:**
-- [ ] OpenAI Codex / ChatGPT CLI (if available)
-- [ ] Google Antigravity (if available)
 - [ ] Aider (open source, has CLI)
 - [ ] Continue (has API)
-
-**Per backend:**
-- [ ] Research CLI capabilities
-- [ ] Implement backend module
-- [ ] Implement stream parser
-- [ ] Test and document
-
-**How to test:** Same as Phase 2, per backend:
-1. Install the backend CLI
-2. Enable in `.env`
-3. Spawn pup, verify streaming and sessions work
+- [ ] Other agent CLIs as they emerge
 
 **Status:** Future
 
@@ -264,13 +309,15 @@ Track token usage and costs (where available).
 
 ## Current Status
 
-**Phase:** 4 (Capability Matrix) — Complete
-**Next:** Phase 5 (Additional Backends) or Phase 6 (Management UI)
+**Phase:** 5 (Additional Backends) — Complete
+**Next:** Phase 6 (Management UI)
 
 **Working:**
 - Backend abstraction layer
 - Claude Code backend (v2.1.9)
 - Cursor backend (v2026.01.23)
+- Codex backend (v0.104.0)
+- Gemini backend (v0.24.4)
 - All chat adapters (WA, TG, Slack)
 - Core commands
 - Backend selection via `#backend` tags
@@ -279,8 +326,8 @@ Track token usage and costs (where available).
 
 **Tested:**
 - 44 automated tests passing
-- Backend parity verified
-- Cursor streaming and sessions work
+- All 4 backends detected and working
+- Stream parsers for all backends verified
 
 ---
 
@@ -344,3 +391,5 @@ Track token usage and costs (where available).
 | 2024-02-21 | Phase 2 complete — Cursor backend implemented |
 | 2024-02-21 | Phase 3 complete — backend selection UX (#backend tags) |
 | 2024-02-21 | Phase 4 complete — capability matrix and graceful degradation |
+| 2024-02-21 | Phase 5a complete — Codex backend (OpenAI) |
+| 2024-02-21 | Phase 5b complete — Gemini backend (Google) |

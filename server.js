@@ -1169,10 +1169,10 @@ async function onMessage(msg) {
 
             // Parse #backend tag from prompt
             let backendName = null;
-            const backendMatch = prompt.match(/#(claude-code|cursor|codex)\b/i);
+            const backendMatch = prompt.match(/#(claude-code|cursor|codex|gemini)\b/i);
             if (backendMatch) {
                 backendName = backendMatch[1].toLowerCase();
-                prompt = prompt.replace(/#(claude-code|cursor|codex)\b/i, '').trim();
+                prompt = prompt.replace(/#(claude-code|cursor|codex|gemini)\b/i, '').trim();
             }
 
             const agent = await spawnAgent(prompt, adapter, null, listeningMsgId, msg.id, model, forceName, backendName);
@@ -1351,10 +1351,10 @@ async function onMessage(msg) {
 
     // Parse #backend tag (e.g. #claude-code, #cursor) and strip from body
     let requestedBackend = null;
-    const backendMatch = body.match(/#(claude-code|cursor|codex)\b/i);
+    const backendMatch = body.match(/#(claude-code|cursor|codex|gemini)\b/i);
     if (backendMatch) {
         requestedBackend = backendMatch[1].toLowerCase();
-        body = body.replace(/#(claude-code|cursor|codex)\b/i, '').trim();
+        body = body.replace(/#(claude-code|cursor|codex|gemini)\b/i, '').trim();
     }
 
     // Prepend media context to body for all routes

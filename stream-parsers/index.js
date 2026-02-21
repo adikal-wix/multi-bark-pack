@@ -5,10 +5,14 @@
 
 const claudeParser = require('./claude');
 const cursorParser = require('./cursor');
+const codexParser = require('./codex');
+const geminiParser = require('./gemini');
 
 const parsers = {
     claude: claudeParser,
     cursor: cursorParser,
+    codex: codexParser,
+    gemini: geminiParser,
 };
 
 module.exports = {
