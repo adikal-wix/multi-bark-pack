@@ -33,7 +33,7 @@ const OWNER_IDS = {
 const WHISPER_MODEL = process.env.WHISPER_MODEL || '/opt/homebrew/share/whisper-cpp/models/ggml-base.en.bin';
 const DEFAULT_BACKEND = process.env.DEFAULT_BACKEND || 'claude-code';
 const ENABLED_BACKENDS = (process.env.ENABLED_BACKENDS || 'claude-code').split(',').map(s => s.trim());
-const UI_PORT = parseInt(process.env.UI_PORT || '3000', 10);
+const UI_PORT = parseInt(process.env.UI_PORT || '3333', 10);
 const SHELL_PATH = process.env.PATH || '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin';
 const cleanEnv = { ...process.env, PATH: `/opt/homebrew/bin:${SHELL_PATH}` };
 delete cleanEnv.CLAUDECODE;
@@ -1584,6 +1584,11 @@ async function main() {
         defaultBackend: DEFAULT_BACKEND,
     });
 
+    // Start Management UI HTTP server immediately (before adapters)
+    httpServer.listen(UI_PORT, () => {
+        console.log(`Management UI available at http://localhost:${UI_PORT}`);
+    });
+
     // Clean up stale .running markers from previous session
     try {
         const staleRunning = execSync(`ls "${TMP_DIR}"/*.running 2>/dev/null || true`, EXEC_OPTS).toString().trim();
@@ -1643,11 +1648,6 @@ async function main() {
         }
     }
     await updatePinnedStatus();
-
-    // Start Management UI HTTP server
-    httpServer.listen(UI_PORT, () => {
-        console.log(`Management UI available at http://localhost:${UI_PORT}`);
-    });
 
     console.log(`bark-pack running with ${adapters.length} adapter(s): ${adapters.map(a => a.name).join(', ')}`);
 }
