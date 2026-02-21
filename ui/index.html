@@ -31,11 +31,44 @@
             --red-glow: rgba(255, 51, 102, 0.2);
 
             --text: #e6edf3;
-            --text-dim: #7d8590;
-            --text-muted: #484f58;
+            --text-dim: #c9d1d9;
+            --text-muted: #8b949e;
 
             --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
             --radius: 4px;
+        }
+
+        /* Light Mode */
+        [data-theme="light"] {
+            --bg-deep: #f6f8fa;
+            --bg-panel: #ffffff;
+            --bg-card: #ffffff;
+            --bg-hover: #f3f4f6;
+            --border: #d0d7de;
+            --border-glow: #afb8c1;
+
+            --phosphor: #1a7f37;
+            --phosphor-dim: #238636;
+            --phosphor-glow: rgba(26, 127, 55, 0.15);
+            --phosphor-text: #1a7f37;
+
+            --amber: #bf8700;
+            --amber-glow: rgba(191, 135, 0, 0.15);
+
+            --cyan: #0969da;
+            --cyan-glow: rgba(9, 105, 218, 0.15);
+
+            --red: #cf222e;
+            --red-glow: rgba(207, 34, 46, 0.15);
+
+            --text: #1f2328;
+            --text-dim: #57606a;
+            --text-muted: #6e7781;
+        }
+
+        [data-theme="light"] body::before,
+        [data-theme="light"] body::after {
+            display: none;
         }
 
         * {
@@ -165,6 +198,54 @@
         @keyframes blink {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
+        }
+
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: 16px;
+            padding-left: 16px;
+            border-left: 1px solid var(--border);
+        }
+
+        .theme-toggle-btn {
+            width: 36px;
+            height: 20px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .theme-toggle-btn::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 14px;
+            height: 14px;
+            background: var(--text-dim);
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        [data-theme="light"] .theme-toggle-btn::after {
+            left: 18px;
+            background: var(--phosphor);
+        }
+
+        .theme-toggle-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .theme-icon {
+            font-size: 1rem;
         }
 
         /* ═══════════════════════════════════════════════════════════════
@@ -1056,6 +1137,10 @@
                 <div class="header-status">
                     <span class="live-indicator"></span>
                     <span>LIVE</span>
+                    <div class="theme-toggle">
+                        <span class="theme-icon" id="theme-icon">🌙</span>
+                        <button class="theme-toggle-btn" id="theme-toggle" title="Toggle theme"></button>
+                    </div>
                 </div>
             </div>
         </header>
@@ -1816,6 +1901,29 @@
             const d = new Date(dateStr);
             return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // THEME TOGGLE
+        // ═══════════════════════════════════════════════════════════════
+        const themeToggle = document.getElementById('theme-toggle');
+        const themeIcon = document.getElementById('theme-icon');
+
+        function setTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+            themeIcon.textContent = theme === 'light' ? '☀️' : '🌙';
+        }
+
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme') || 'dark';
+            setTheme(current === 'dark' ? 'light' : 'dark');
+        }
+
+        // Load saved theme or default to dark
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        setTheme(savedTheme);
+
+        themeToggle.addEventListener('click', toggleTheme);
 
         // ═══════════════════════════════════════════════════════════════
         // INIT
