@@ -1489,7 +1489,46 @@ async function main() {
     console.log(`bark-pack running with ${adapters.length} adapter(s): ${adapters.map(a => a.name).join(', ')}`);
 }
 
-main().catch(e => {
-    console.error('Fatal startup error:', e);
-    process.exit(1);
-});
+// Export for testing
+module.exports = {
+    // State
+    agents,
+    deletedAgents,
+    msgToAgent,
+
+    // Agent lifecycle
+    spawnAgent,
+    sendToAgent,
+    findAgentByName,
+    findDeletedByName,
+    softDeleteAgent,
+    hardDeleteAgent,
+
+    // Commands
+    stopAgents,
+    clearAgents,
+    deleteAgents,
+    rebornAgent,
+    resetAgents,
+
+    // Utilities
+    genId,
+    nextPupName,
+    saveState,
+    loadState,
+    buildStatusText,
+    classifyAgents,
+
+    // Config
+    TMP_DIR,
+    PROJECTS_DIR,
+    DEFAULT_BACKEND,
+};
+
+// Only run main() when executed directly (not when required as module)
+if (require.main === module) {
+    main().catch(e => {
+        console.error('Fatal startup error:', e);
+        process.exit(1);
+    });
+}

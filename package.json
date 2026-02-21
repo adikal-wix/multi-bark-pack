@@ -1,14 +1,15 @@
 {
-  "name": "bark-pack",
-  "version": "0.1.0",
-  "description": "Multi-platform Claude Code agent swarm. Spawn persistent Claude Code agents via WhatsApp, Telegram, or Slack.",
+  "name": "multi-bark-pack",
+  "version": "0.2.0",
+  "description": "Multi-platform, multi-backend AI agent swarm. Spawn persistent agents via WhatsApp, Telegram, or Slack.",
   "main": "server.js",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
     "start": "bash start.sh",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node test/run-all.js",
+    "test:phase1": "node test/run-all.js"
   },
   "keywords": ["claude", "claude-code", "ai-agents", "whatsapp", "telegram", "slack", "tmux"],
   "author": "",

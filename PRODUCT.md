@@ -94,7 +94,13 @@ Ensure claude-code backend works identically to bark-pack.
 5. Use `#haiku` tag → model switches
 6. Pup sends file → you receive it
 
-**Status:** Not started
+**Automated tests:** `node test/run-all.js` — 44 tests covering:
+- Backend module and initialization
+- Stream parser
+- Agent lifecycle commands
+- Status building
+
+**Status:** ✅ Complete (automated tests pass)
 
 ---
 
@@ -257,8 +263,8 @@ Track token usage and costs (where available).
 
 ## Current Status
 
-**Phase:** 0 (Foundation) — Complete
-**Next:** Phase 1 (Backend Parity) — verify no regressions
+**Phase:** 1 (Backend Parity) — Complete
+**Next:** Phase 2 (Cursor Backend)
 
 **Working:**
 - Backend abstraction layer
