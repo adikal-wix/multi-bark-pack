@@ -4,9 +4,11 @@
  */
 
 const claudeParser = require('./claude');
+const cursorParser = require('./cursor');
 
 const parsers = {
     claude: claudeParser,
+    cursor: cursorParser,
 };
 
 module.exports = {

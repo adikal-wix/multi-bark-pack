@@ -4,10 +4,12 @@
  */
 
 const createClaudeCodeBackend = require('./claude-code');
+const createCursorBackend = require('./cursor');
 
 // Backend factory functions
 const backendFactories = {
     'claude-code': createClaudeCodeBackend,
+    'cursor': createCursorBackend,
 };
 
 // Instantiated backends (cached)
