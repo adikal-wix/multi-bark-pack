@@ -321,6 +321,369 @@ app.delete('/api/agents/:id', (req, res) => {
     res.json({ success: true, deleted: result.deleted });
 });
 
+// REST API: Get agent message history
+app.get('/api/agents/:id/messages', (req, res) => {
+    const agent = agents.get(req.params.id);
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+    const history = historyManager.load(agent.id);
+    const messages = (history.turns || []).map(turn => ({
+        role: turn.role,
+        content: turn.content,
+        timestamp: turn.timestamp,
+        tools: turn.tools || [],
+    }));
+    res.json(messages);
+});
+
+// REST API: Send message to agent
+app.post('/api/agents/:id/message', async (req, res) => {
+    const agent = agents.get(req.params.id);
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+        return res.status(400).json({ error: 'Message content required' });
+    }
+
+    // Check if agent is already running
+    const runningFile = path.join(TMP_DIR, `${agent.id}.running`);
+    if (existsSync(runningFile)) {
+        return res.status(409).json({ error: 'Agent is busy' });
+    }
+
+    // Use the UI adapter to run the command
+    const prompt = content.trim();
+
+    // Extract model tags from message
+    let model = null;
+    const modelTags = { '#haiku': 'haiku', '#sonnet': 'sonnet', '#opus': 'opus' };
+    let cleanPrompt = prompt;
+    for (const [tag, m] of Object.entries(modelTags)) {
+        if (cleanPrompt.includes(tag)) {
+            model = m;
+            cleanPrompt = cleanPrompt.replace(new RegExp(tag, 'g'), '').trim();
+        }
+    }
+
+    if (model) agent.model = model;
+
+    // Save user turn to history
+    historyManager.addUserTurn(agent.id, cleanPrompt);
+
+    // Broadcast the user message via WebSocket
+    broadcastChatMessage(agent.id, {
+        role: 'user',
+        content: cleanPrompt,
+        timestamp: new Date().toISOString(),
+    });
+
+    // Run the command without an adapter (results come via WebSocket)
+    runAgentCommandForUI(agent, cleanPrompt);
+
+    res.json({ success: true });
+});
+
+// REST API: Create new agent
+app.post('/api/agents', async (req, res) => {
+    const { name, message, backend: backendName, model } = req.body;
+
+    if (!message || !message.trim()) {
+        return res.status(400).json({ error: 'Initial message required' });
+    }
+
+    // Validate backend if specified
+    if (backendName && !backends.isAvailable(backendName)) {
+        return res.status(400).json({ error: `Backend "${backendName}" not available` });
+    }
+
+    // Extract tags from message
+    let cleanMessage = message.trim();
+    let requestedModel = model || null;
+    let requestedBackend = backendName || null;
+
+    // Model tags
+    const modelTags = { '#haiku': 'haiku', '#sonnet': 'sonnet', '#opus': 'opus' };
+    for (const [tag, m] of Object.entries(modelTags)) {
+        if (cleanMessage.includes(tag)) {
+            requestedModel = m;
+            cleanMessage = cleanMessage.replace(new RegExp(tag, 'g'), '').trim();
+        }
+    }
+
+    // Backend tags
+    const backendTags = { '#codex': 'codex', '#cursor': 'cursor', '#gemini': 'gemini', '#claude': 'claude-code' };
+    for (const [tag, b] of Object.entries(backendTags)) {
+        if (cleanMessage.includes(tag)) {
+            requestedBackend = b;
+            cleanMessage = cleanMessage.replace(new RegExp(tag, 'g'), '').trim();
+        }
+    }
+
+    // Create the agent
+    const id = genId();
+    const agentName = name?.trim() || nextPupName();
+    const backend = backends.get(requestedBackend) || backends.getDefault(DEFAULT_BACKEND);
+    const sessionId = backend.generateSessionId();
+    const tmuxSession = `bark-${agentName}`;
+
+    // Create tmux session
+    try {
+        execSync(`tmux new-session -d -s "${tmuxSession}" -c "${PROJECTS_DIR}"`, EXEC_OPTS);
+        execSync(`tmux send-keys -t "${tmuxSession}" "echo '=== 🐕 ${agentName} (${id}) ==='" Enter`, EXEC_OPTS);
+    } catch (e) {
+        console.log(`  ⚠️ Could not create tmux session for ${agentName}: ${e.message}`);
+    }
+
+    const agent = {
+        id,
+        name: agentName,
+        sessionId,
+        tmuxSession,
+        backend: backend.name,
+        model: requestedModel || backend.defaultModel,
+        status: 'active',
+        parentId: null,
+        createdAt: new Date().toISOString(),
+        source: 'ui',
+        packId: packsData.activePack,
+        skills: skillsManager.list(true).map(s => s.id),
+    };
+
+    agents.set(id, agent);
+    saveState();
+    broadcastAgents();
+
+    console.log(`  🐕 Spawned ${agentName} from UI (tmux: ${tmuxSession})`);
+
+    // Save user turn and run command
+    historyManager.addUserTurn(id, cleanMessage);
+    runAgentCommandForUI(agent, cleanMessage);
+
+    res.json(agent);
+});
+
+// Run agent command for UI (no external adapter)
+function runAgentCommandForUI(agent, prompt) {
+    // Get the backend for this agent
+    const backend = backends.get(agent.backend) || backends.getDefault(DEFAULT_BACKEND);
+    if (!backend) {
+        console.error(`  ❌ Backend ${agent.backend} not found`);
+        return;
+    }
+
+    const promptFile = path.join(TMP_DIR, `${agent.id}.prompt`);
+    const outFile = path.join(TMP_DIR, `${agent.id}.out`);
+    const doneFile = path.join(TMP_DIR, `${agent.id}.done`);
+    const progressFile = path.join(TMP_DIR, `${agent.id}.progress`);
+    const runningFile = path.join(TMP_DIR, `${agent.id}.running`);
+    const displayScript = path.join(__dirname, 'stream-display.js');
+    const cwdFile = path.join(TMP_DIR, `${agent.id}.cwd`);
+    const sendDir = path.join(TMP_DIR, `${agent.id}-send`);
+
+    mkdirSync(sendDir, { recursive: true });
+
+    const isResume = agent.hasRun;
+
+    // Build system prompt
+    const sysPromptFile = path.join(TMP_DIR, `${agent.id}.sysprompt`);
+    let systemPrompt = `You are ${agent.name}, a bark-pack pup. All repo work must happen inside ${PROJECTS_DIR}/ — always clone there, even if the repo exists elsewhere on this machine. Reuse existing clones inside ${PROJECTS_DIR}/ (git pull to update). Never reference or modify repos outside of ${PROJECTS_DIR}/. Work on projects using absolute paths from ${PROJECTS_DIR}/ — do NOT cd into them before running commands. When you start working in a project directory, write its absolute path to ${cwdFile} so the server can track it. To send files to the user, copy them to ${sendDir}/. Sign commits with: 🐾 Paw-Printed-By: ${agent.name} <${agent.name.toLowerCase()}@bark-pack>`;
+
+    // Append skill content if agent has skills (only on first message)
+    if (!isResume && agent.skills && agent.skills.length > 0) {
+        const skillContent = skillsManager.buildSkillPrompt(agent.skills);
+        if (skillContent) {
+            systemPrompt += skillContent;
+            console.log(`  ⚡ Injecting skills for ${agent.name}: ${agent.skills.join(', ')}`);
+        }
+    }
+    writeFileSync(sysPromptFile, systemPrompt);
+
+    // For backends that don't support system prompts, prepend to first message
+    let actualPrompt = prompt;
+    if (!isResume && !backend.capabilities.systemPrompt) {
+        actualPrompt = `[System Instructions]\n${systemPrompt}\n\n[User Message]\n${prompt}`;
+    }
+
+    // Write prompt and clean up previous output
+    writeFileSync(promptFile, actualPrompt);
+    writeFileSync(runningFile, '1');
+    for (const f of [outFile, doneFile, progressFile]) {
+        try { unlinkSync(f); } catch {}
+    }
+
+    agent.hasRun = true;
+    saveState();
+    broadcastAgents();
+
+    // Build command using backend
+    const scriptFile = path.join(TMP_DIR, `${agent.id}.sh`);
+    const { script } = backend.buildCommand({
+        promptFile,
+        sessionId: agent.sessionId,
+        isResume,
+        model: agent.model,
+        systemPromptFile: sysPromptFile,
+        streamParserScript: displayScript,
+        agentId: agent.id,
+        tmpDir: TMP_DIR,
+    });
+    writeFileSync(scriptFile, script, { mode: 0o755 });
+
+    // Ensure tmux session exists
+    try {
+        execSync(`tmux has-session -t "${agent.tmuxSession}" 2>/dev/null`, EXEC_OPTS);
+    } catch {
+        // Session doesn't exist, recreate it
+        try {
+            const startDir = agent.cwd && existsSync(agent.cwd) ? agent.cwd : PROJECTS_DIR;
+            execSync(`tmux new-session -d -s "${agent.tmuxSession}" -c "${startDir}"`, EXEC_OPTS);
+            execSync(`tmux send-keys -t "${agent.tmuxSession}" "echo '=== 🐕 ${agent.name} (${agent.id}) === (restored)'" Enter`, EXEC_OPTS);
+            console.log(`  🔄 Recreated tmux session for ${agent.name}`);
+        } catch (e2) {
+            console.error(`  ❌ Could not create tmux session for ${agent.name}: ${e2.message}`);
+            if (existsSync(runningFile)) unlinkSync(runningFile);
+            broadcastAgents();
+            return;
+        }
+    }
+
+    // Execute in tmux
+    try {
+        execSync(`tmux send-keys -t "${agent.tmuxSession}" "bash '${scriptFile}'" Enter`, EXEC_OPTS);
+        console.log(`  💬 UI message sent to ${agent.name}`);
+    } catch (e) {
+        console.error(`  ❌ Failed to run command in tmux for ${agent.name}: ${e.message}`);
+        if (existsSync(runningFile)) unlinkSync(runningFile);
+        broadcastAgents();
+        return;
+    }
+
+    // Start polling for UI
+    pollAgentOutputForUI(agent, runningFile, progressFile, outFile, doneFile);
+}
+
+// Poll agent output and broadcast via WebSocket
+function pollAgentOutputForUI(agent, runningFile, progressFile, outFile, doneFile) {
+    const pollInterval = 800;
+    const timeout = parseInt(process.env.AGENT_TIMEOUT || '600000', 10);
+    const startTime = Date.now();
+    let lastProgress = '';
+    let lastProgressHash = '';
+
+    const poll = () => {
+        // Check if done
+        if (existsSync(doneFile)) {
+            const output = existsSync(outFile) ? readFileSync(outFile, 'utf8').trim() : '';
+            const exitCode = parseInt(readFileSync(doneFile, 'utf8').trim(), 10) || 0;
+
+            // Clean up
+            if (existsSync(runningFile)) unlinkSync(runningFile);
+
+            // Update cwd
+            const cwdFile = path.join(TMP_DIR, `${agent.id}.cwd`);
+            if (existsSync(cwdFile)) {
+                const newCwd = readFileSync(cwdFile, 'utf8').trim();
+                if (newCwd && existsSync(newCwd)) {
+                    agent.cwd = newCwd;
+                } else {
+                    agent.cwd = null;
+                }
+            }
+
+            // Record in history
+            const toolsUsed = historyManager.extractToolsFromOutput(lastProgress || '');
+            historyManager.addAssistantTurn(agent.id, output, {
+                tools: toolsUsed,
+                exitCode,
+                cwd: agent.cwd,
+            });
+
+            // Extract session ID from session file (for backends like Codex that generate it)
+            const sessionFile = path.join(TMP_DIR, `${agent.id}.session`);
+            if (!agent.sessionId && existsSync(sessionFile)) {
+                try {
+                    const extractedId = readFileSync(sessionFile, 'utf8').trim();
+                    if (extractedId) {
+                        agent.sessionId = extractedId;
+                        console.log(`  🔑 Extracted session ID for ${agent.name}: ${extractedId}`);
+                    }
+                } catch {}
+            }
+
+            // Broadcast final message
+            broadcastChatMessage(agent.id, {
+                role: 'assistant',
+                content: output,
+                timestamp: new Date().toISOString(),
+                tools: toolsUsed,
+                streaming: false,
+            });
+
+            // Broadcast stream end
+            broadcastToWS({ type: 'agent_stream_end', agentId: agent.id });
+
+            saveState();
+            broadcastAgents();
+            return;
+        }
+
+        // Check timeout
+        if (Date.now() - startTime > timeout) {
+            console.log(`  ⏰ Agent ${agent.name} timed out`);
+            if (existsSync(runningFile)) unlinkSync(runningFile);
+            historyManager.recordError(agent.id, 'timeout', 'Command timed out');
+            broadcastToWS({ type: 'agent_stream_end', agentId: agent.id });
+            broadcastAgents();
+            return;
+        }
+
+        // Read progress
+        if (existsSync(progressFile)) {
+            const progress = readFileSync(progressFile, 'utf8').trim();
+            const progressHash = progress.length + progress.slice(-100);
+
+            if (progressHash !== lastProgressHash) {
+                lastProgressHash = progressHash;
+                lastProgress = progress;
+
+                // Extract tools from progress
+                const toolsUsed = historyManager.extractToolsFromOutput(progress);
+
+                // Broadcast streaming update
+                broadcastToWS({
+                    type: 'agent_stream',
+                    agentId: agent.id,
+                    content: progress,
+                    tools: toolsUsed,
+                });
+            }
+        }
+
+        setTimeout(poll, pollInterval);
+    };
+
+    setTimeout(poll, pollInterval);
+}
+
+// Broadcast chat message to WebSocket clients
+function broadcastChatMessage(agentId, message) {
+    broadcastToWS({
+        type: 'agent_message',
+        agentId,
+        message,
+    });
+}
+
+// Broadcast to WebSocket
+function broadcastToWS(data) {
+    if (wsClients.size === 0) return;
+    const msg = JSON.stringify(data);
+    for (const ws of wsClients) {
+        try { ws.send(msg); } catch {}
+    }
+}
+
 // WebSocket upgrade handling
 httpServer.on('upgrade', (request, socket, head) => {
     if (request.url === '/ws') {
@@ -478,7 +841,7 @@ async function spawnAgent(prompt, adapter, parentId = null, reuseMsgId = null, r
 
     // Create tmux session with a bash shell for the agent to work in
     try {
-        execSync(`tmux new-session -d -s "${tmuxSession}"`, EXEC_OPTS);
+        execSync(`tmux new-session -d -s "${tmuxSession}" -c "${PROJECTS_DIR}"`, EXEC_OPTS);
         // Show a banner
         execSync(`tmux send-keys -t "${tmuxSession}" "echo '=== 🐕 ${name} (${id}) ==='" Enter`, EXEC_OPTS);
     } catch (e) {
@@ -642,7 +1005,8 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
         execSync(`tmux has-session -t "${agent.tmuxSession}" 2>/dev/null`, EXEC_OPTS);
     } catch {
         try {
-            execSync(`tmux new-session -d -s "${agent.tmuxSession}"`, EXEC_OPTS);
+            const startDir = agent.cwd && existsSync(agent.cwd) ? agent.cwd : PROJECTS_DIR;
+            execSync(`tmux new-session -d -s "${agent.tmuxSession}" -c "${startDir}"`, EXEC_OPTS);
             execSync(`tmux send-keys -t "${agent.tmuxSession}" "echo '=== 🐕 ${agent.name} (${agent.id}) === (restored)'" Enter`, EXEC_OPTS);
             console.log(`  🔄 Restored tmux session for ${agent.name}`);
         } catch (e) {
@@ -725,6 +1089,19 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
         try {
             exitCode = readFileSync(doneMarker, 'utf8').trim();
         } catch {}
+
+        // Extract session ID from session file (for backends like Codex that generate it)
+        const sessionFile = path.join(TMP_DIR, `${agent.id}.session`);
+        if (!agent.sessionId && existsSync(sessionFile)) {
+            try {
+                const extractedId = readFileSync(sessionFile, 'utf8').trim();
+                if (extractedId) {
+                    agent.sessionId = extractedId;
+                    saveState();
+                    console.log(`  🔑 Extracted session ID for ${agent.name}: ${extractedId}`);
+                }
+            } catch {}
+        }
 
         // Extract tools used from progress for history
         const toolsUsed = historyManager.extractToolsFromOutput(lastProgress || '');
@@ -969,7 +1346,8 @@ function rebornAgent(name) {
 
     dead.tmuxSession = `bark-${dead.name}`;
     try {
-        execSync(`tmux new-session -d -s "${dead.tmuxSession}"`, EXEC_OPTS);
+        const startDir = dead.cwd && existsSync(dead.cwd) ? dead.cwd : PROJECTS_DIR;
+        execSync(`tmux new-session -d -s "${dead.tmuxSession}" -c "${startDir}"`, EXEC_OPTS);
         execSync(`tmux send-keys -t "${dead.tmuxSession}" "echo '=== 🐕 ${dead.name} (${dead.id}) === (reborn)'" Enter`, EXEC_OPTS);
     } catch (e) {
         console.log(`  Could not create tmux session for ${dead.name}: ${e.message}`);
@@ -1110,7 +1488,8 @@ async function runDaily(adapter) {
                 execSync(`tmux has-session -t "${agent.tmuxSession}" 2>/dev/null`, EXEC_OPTS);
             } catch {
                 try {
-                    execSync(`tmux new-session -d -s "${agent.tmuxSession}"`, EXEC_OPTS);
+                    const startDir = agent.cwd && existsSync(agent.cwd) ? agent.cwd : PROJECTS_DIR;
+                    execSync(`tmux new-session -d -s "${agent.tmuxSession}" -c "${startDir}"`, EXEC_OPTS);
                 } catch (e) {
                     console.log(`  ❌ /daily: couldn't reach ${agent.name}: ${e.message}`);
                     done(`${emoji} *${agent.name}*${project} (${status}): _couldn't reach_`);

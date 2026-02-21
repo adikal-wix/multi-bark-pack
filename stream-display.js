@@ -15,6 +15,7 @@ const path = require('path');
 const progressFile = path.join(tmpDir, `${agentId}.progress`);
 const outFile = path.join(tmpDir, `${agentId}.out`);
 const doneMarker = path.join(tmpDir, `${agentId}.done`);
+const sessionFile = path.join(tmpDir, `${agentId}.session`);
 
 // --- State ---
 let fullText = '';
@@ -128,6 +129,10 @@ process.stdin.on('data', (chunk) => {
             // ═══════════════════════════════════════════════════════════
             if (data.type === 'thread.started') {
                 process.stdout.write(`🧵 Session: ${data.thread_id}\n`);
+                // Write session ID to file for server to read
+                if (data.thread_id) {
+                    fs.writeFileSync(sessionFile, data.thread_id);
+                }
             }
 
             if (data.type === 'item.completed' && data.item) {
@@ -168,20 +173,65 @@ process.stdin.on('data', (chunk) => {
             // ═══════════════════════════════════════════════════════════
             // GEMINI FORMAT
             // ═══════════════════════════════════════════════════════════
-            if (data.type === 'session.init') {
+            if (data.type === 'init' && data.session_id) {
                 process.stdout.write(`🧵 Session: ${data.session_id}\n`);
+                // Write session ID to file for server to read
+                fs.writeFileSync(sessionFile, data.session_id);
             }
 
-            if (data.type === 'response.text') {
-                fullText += (data.text || '') + '\n';
-                progressText += data.text || '';
-                process.stdout.write(data.text || '');
+            if (data.type === 'message' && data.role === 'assistant') {
+                const text = data.content || '';
+                fullText += text;
+                progressText += text;
+                process.stdout.write(text);
                 writeProgress();
             }
 
-            if (data.type === 'response.done') {
+            if (data.type === 'result' && data.status) {
+                // Gemini result format
                 fs.writeFileSync(outFile, fullText || '(no output)');
-                fs.writeFileSync(doneMarker, '0');
+                fs.writeFileSync(doneMarker, data.status === 'success' ? '0' : '1');
+                process.stdout.write('\n✅ Done\n');
+            }
+
+            // ═══════════════════════════════════════════════════════════
+            // CURSOR FORMAT
+            // ═══════════════════════════════════════════════════════════
+            if (data.type === 'system' && data.subtype === 'init') {
+                process.stdout.write(`🧵 Session: ${data.session_id}\n`);
+                // Write session ID to file for server to read
+                if (data.session_id) {
+                    fs.writeFileSync(sessionFile, data.session_id);
+                }
+            }
+
+            if (data.type === 'thinking' && data.subtype === 'delta') {
+                progressText += data.text || '';
+                process.stdout.write('\x1b[2m' + (data.text || '') + '\x1b[0m');
+            }
+
+            if (data.type === 'assistant' && data.message?.content) {
+                // Extract text from content array
+                for (const block of data.message.content) {
+                    if (block.type === 'text' && block.text) {
+                        fullText += block.text;
+                        progressText += block.text;
+                        process.stdout.write(block.text);
+                    }
+                    if (block.type === 'tool_use') {
+                        const toolName = block.name || 'tool';
+                        tools.push(toolName);
+                        process.stdout.write(`\n${toolIcon(toolName)} ${toolName}\n`);
+                    }
+                }
+                writeProgress();
+            }
+
+            if (data.type === 'result' && data.subtype) {
+                // Cursor result format
+                const finalText = data.result || fullText;
+                fs.writeFileSync(outFile, finalText);
+                fs.writeFileSync(doneMarker, data.is_error ? '1' : '0');
                 process.stdout.write('\n✅ Done\n');
             }
 

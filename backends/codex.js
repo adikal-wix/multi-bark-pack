@@ -87,11 +87,21 @@ module.exports = function createCodexBackend(config = {}) {
         streamParserName: 'codex',
 
         extractSessionId(output) {
-            // Extract thread_id from first-run output
-            // Look for: {"type":"thread.started","thread_id":"..."}
+            // Extract thread_id from output
+            // Look for either:
+            // 1. Raw JSON: {"type":"thread.started","thread_id":"..."}
+            // 2. Processed format from stream-display.js: "🧵 Session: ..."
             try {
                 const lines = output.split('\n');
                 for (const line of lines) {
+                    // Check for processed format first (from stream-display.js)
+                    if (line.includes('🧵 Session:')) {
+                        const match = line.match(/🧵 Session:\s*(\S+)/);
+                        if (match && match[1]) {
+                            return match[1];
+                        }
+                    }
+                    // Check for raw JSON format
                     if (line.includes('thread.started')) {
                         const data = JSON.parse(line);
                         if (data.thread_id) {
