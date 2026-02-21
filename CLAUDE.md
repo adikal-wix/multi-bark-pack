@@ -1,0 +1,156 @@
+# multi-bark-pack
+
+Multi-platform, multi-backend agent swarm. Messages in WhatsApp, Telegram, or Slack spawn LLM agent CLI instances in tmux sessions. Supports multiple backends: Claude Code, Cursor, and more. Each agent ("pup") has a persistent conversation via session management.
+
+## Stack
+
+Node.js, whatsapp-web.js, @slack/web-api, @slack/socket-mode, tmux, whisper.cpp (voice transcription), ffmpeg
+
+**Supported Backends:**
+- Claude Code CLI (`claude`)
+- Cursor CLI (`agent`) — planned
+- OpenAI Codex — planned
+
+## Files
+
+- `server.js` — Main server: adapter manager, agent manager, message router
+- `stream-display.js` — Parses streaming output, writes progress/output files
+- `adapters/` — Chat platform adapters
+  - `whatsapp.js` — WhatsApp adapter (whatsapp-web.js)
+  - `telegram.js` — Telegram adapter (raw Bot API via fetch)
+  - `slack.js` — Slack adapter (Socket Mode)
+- `backends/` — LLM agent backends
+  - `index.js` — Backend registry and initialization
+  - `claude-code.js` — Claude Code CLI backend
+- `stream-parsers/` — Output format handlers
+  - `index.js` — Parser registry
+  - `claude.js` — Claude stream-json parser
+- `start.sh` — Auto-restart wrapper: exits 0 → restarts, non-zero → stops
+- `agents.json` — Runtime state: active + soft-deleted agents (gitignored)
+- `routing.json` — Message ID → agent ID map, all platforms (gitignored)
+- `status.json` — Pinned status message IDs, persisted across restarts (gitignored)
+- `.bark-tmp/` — Per-agent temp files: `.prompt`, `.out`, `.done`, `.progress`, `.cwd`, `.running`, `.sh`, `.sysprompt` (gitignored)
+- `.bark-tmp/{id}-send/` — Per-agent outbox: pups drop files here, server delivers via `sendFile()` (gitignored)
+- `projects/` — Pup working directory: repos are cloned here (gitignored, auto-created)
+- `docs/plans/` — Implementation plans
+
+## Commands
+
+```
+yarn start              # Start the server (auto-restarts on clean exit)
+node server.js          # Start without auto-restart wrapper
+tmux ls                 # List active agent sessions
+tmux attach -t bark-Chase  # Watch a specific pup work
+```
+
+### Commands (all platforms)
+
+- `/status` — refresh pinned status message
+- `/backends` — show available LLM backends and capabilities
+- `/stop name` — stop a running pup (sends Ctrl+C)
+- `/stop pack` — stop all running pups
+- `/clear name` — shelve pup (deactivate, can `/reborn`)
+- `/clear pack` — shelve all pups
+- `/delete name` — permanently remove pup (frees name, no reborn)
+- `/delete pack` — permanently remove all (active + losts)
+- `/reset name` — wipe pup memory (stays active, new session)
+- `/reset pack` — wipe all pup memory
+- `/losts` — list shelved pups available for resurrection
+- `/reborn name` — resurrect a shelved pup with its full session history
+- `/purge` — permanently delete all shelved pups (frees all names)
+- `/create` — reply to a message to spawn a new pup with that context (optional: add instructions or `@name` to set the pup's name)
+- `/daily` — request a one-line standup from every active pup
+- `/help` — show command list
+- `/restart` — restart the server (auto-restarts via start.sh)
+- `/shutdown` — shut down the server without auto-restarting
+
+## Architecture
+
+```
+Message (WhatsApp/Telegram/Slack) → Router → Backend (tmux + CLI)
+Backend output → stream-parser → .progress/.out files → live-edited reply
+```
+
+### Backend Abstraction
+
+Each backend implements:
+- `isInstalled()` / `getVersion()` — availability check
+- `buildCommand()` — generate CLI command for the agent
+- `generateSessionId()` — create new session identifier
+- `capabilities` — feature flags (streaming, sessions, etc.)
+
+Agents are locked to their backend once spawned. `/reset` keeps the same backend.
+
+**Routing priority:** reply-to > @name mention > spawn new agent
+
+**Agent lifecycle:** Each agent runs the backend CLI with session management. Output streams through the appropriate parser which writes progress to `.bark-tmp/` for live message editing. System prompt is written to `.bark-tmp/{id}.sysprompt`. The full command is written to `.bark-tmp/{id}.sh` and executed via `bash` in the tmux pane.
+
+**Working directory tracking:** Pups write their current working directory to `.bark-tmp/{id}.cwd`. The server reads this after each command completes and persists `agent.cwd`. If the directory no longer exists on disk, cwd resets to null.
+
+**File sending:** Pups can send files to the user by copying them to `.bark-tmp/{id}-send/`. After the command finishes, the server delivers each file via `adapter.sendFile()`.
+
+**Shelve (soft-delete):** `/clear` sets `status: 'deleted'` and preserves agent metadata + session ID. `/reborn` flips status back to `active` and uses resume with the original session.
+
+**Reset:** `/reset` wipes a pup's memory (new session, clears cwd) while keeping the pup active and on the same backend.
+
+**Naming:** First spawn uses bare Paw Patrol name (Chase, Marshall...). Once all 32 base names are taken (active or deleted), new pups get `adjective-Name` combos. 32 adjectives × 32 names = 1,024 combos.
+
+**Status pin:** Pinned message updates on every significant event. `/status` forces a re-sync.
+
+**Voice messages:** Voice messages are transcribed locally using whisper.cpp. Audio is converted to 16kHz WAV via ffmpeg, then transcribed.
+
+**Model selection:** Add `#haiku`, `#sonnet`, or `#opus` anywhere in a message to switch that pup's model. Tag is stripped before routing. Model persists per pup.
+
+## Configuration
+
+```bash
+# .env
+DEFAULT_BACKEND=claude-code
+ENABLED_BACKENDS=claude-code,cursor
+
+# Platform adapters
+WA_ENABLED=true
+WA_GROUP=bark-pack
+WA_OWNER=your-whatsapp-id
+
+TELEGRAM_TOKEN=your-bot-token
+TG_OWNER=your-telegram-id
+
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+SLACK_OWNER=your-slack-id
+
+# Voice transcription
+WHISPER_MODEL=/opt/homebrew/share/whisper-cpp/models/ggml-base.en.bin
+```
+
+## Key constraints
+
+- `CLAUDECODE` env var must be deleted from child process env (prevents nesting error)
+- PATH must include `/opt/homebrew/bin` for tmux, CLI tools, whisper-cli, and ffmpeg
+- tmux sessions are recreated on-the-fly if lost after server restart
+- Messages max ~4096 chars — output is truncated at server level
+- Backend is immutable per-pup — switching requires `/delete` + new spawn
+
+## ⚠️ CRITICAL: Git commit rules
+
+**NEVER commit without explicit user approval.** This is the #1 rule for all pups.
+
+1. **Before committing:** Always ask the user for approval first.
+2. **Before pushing:** Always ask the user for approval first.
+3. **No auto-commits:** Do not commit unless the user specifically asked.
+4. **No batch commits:** Each commit should be one logical change.
+5. **No force push:** Never `git push --force` without explicit approval.
+
+## Commit conventions
+
+All commits must end with a pup credit line:
+```
+🐾 Paw-Printed-By: Chase <chase@bark-pack>
+```
+
+## Do not
+
+- Edit `.wwebjs_auth/` — WhatsApp session auth, breaks login if modified
+- Run `node server.js` inside another Claude Code session — nesting error
+- Commit or push without explicit user approval — see git rules above

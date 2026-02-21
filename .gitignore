@@ -1,0 +1,12 @@
+node_modules/
+package-lock.json
+.wwebjs_auth/
+.wwebjs_cache/
+.bark-tmp/
+agents.json
+routing.json
+status.json
+docs/
+projects/
+.env
+tools-registry.json
