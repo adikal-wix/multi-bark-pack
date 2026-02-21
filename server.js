@@ -1157,26 +1157,27 @@ async function onMessage(msg) {
             await adapter.send(
                 '*Commands:*\n' +
                 '`/status` — show pack status\n' +
-                '`/stop name` — stop a running pup\n' +
-                '`/stop pack` — stop all running pups\n' +
-                '`/clear name` — shelve pup (can /reborn)\n' +
-                '`/clear pack` — shelve all pups\n' +
-                '`/delete name` — permanently remove pup (frees name)\n' +
-                '`/delete pack` — permanently remove all\n' +
-                '`/reset name` — wipe pup memory (stays active)\n' +
-                '`/reset pack` — wipe all pup memory\n' +
-                '`/create` — reply to a message to spawn a new pup with that context\n' +
-                '`/losts` — show shelved pups\n' +
-                '`/purge` — permanently delete all shelved pups\n' +
-                '`/reborn name` — resurrect a shelved pup\n' +
-                '`/daily` — daily standup from all pups\n' +
                 '`/backends` — show available LLM backends\n' +
-                '`/restart` — restart the server\n' +
-                '`/shutdown` — shut down the server (no auto-restart)\n\n' +
+                '`/stop name` — stop a running pup\n' +
+                '`/clear name` — shelve pup (can /reborn)\n' +
+                '`/delete name` — permanently remove pup\n' +
+                '`/reset name` — wipe pup memory\n' +
+                '`/create` — reply to spawn pup with context\n' +
+                '`/losts` — show shelved pups\n' +
+                '`/reborn name` — resurrect shelved pup\n' +
+                '`/daily` — standup from all pups\n' +
+                '`/purge` — delete all shelved pups\n' +
+                '`/restart` `/shutdown` — server control\n' +
+                '_Use `pack` instead of name for all pups_\n\n' +
+                '*Multi-LLM:*\n' +
+                '`#claude-code` `#cursor` `#codex` `#gemini`\n' +
+                '`#haiku` `#sonnet` `#opus` _(models)_\n' +
+                'Example: `#cursor #opus fix this bug`\n\n' +
                 '*Routing:*\n' +
-                '`@name msg` — send to agent\n' +
-                'Reply to agent msg — send to that agent\n' +
-                'New message — spawns a new pup'
+                '`@name msg` — send to pup\n' +
+                'Reply — send to that pup\n' +
+                'New message — spawn new pup\n\n' +
+                '_Dashboard: http://localhost:3333_'
             );
             return;
         }
