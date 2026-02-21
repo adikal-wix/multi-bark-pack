@@ -208,6 +208,12 @@ function loadState() {
 // --- Core Agent Functions (adapter-agnostic) ---
 
 async function spawnAgent(prompt, adapter, parentId = null, reuseMsgId = null, replyToId = null, model = null, forceName = null, backendName = null) {
+    // Validate requested backend is available
+    if (backendName && !backends.isAvailable(backendName)) {
+        await adapter.send(`❌ Backend "${backendName}" not available`, replyToId);
+        return null;
+    }
+
     const id = genId();
     const name = forceName || nextPupName();
 
@@ -296,25 +302,32 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
 
     const runningMarker = path.join(TMP_DIR, `${agent.id}.running`);
 
-    // Write prompt and clean up previous output
-    writeFileSync(promptFile, prompt);
-    writeFileSync(runningMarker, '1');
-    for (const f of [outFile, doneMarker, progressFile]) {
-        try { unlinkSync(f); } catch {}
-    }
-
     const isResume = agent.hasRun;
-    agent.hasRun = true;
-    saveState();
 
     const cwdFile = path.join(TMP_DIR, `${agent.id}.cwd`);
     const sendDir = path.join(TMP_DIR, `${agent.id}-send`);
     mkdirSync(sendDir, { recursive: true });
 
-    // Write system prompt to file (used on first run only)
+    // Build system prompt
     const sysPromptFile = path.join(TMP_DIR, `${agent.id}.sysprompt`);
     const systemPrompt = `You are ${agent.name}, a bark-pack pup. All repo work must happen inside ${PROJECTS_DIR}/ — always clone there, even if the repo exists elsewhere on this machine. Reuse existing clones inside ${PROJECTS_DIR}/ (git pull to update). Never reference or modify repos outside of ${PROJECTS_DIR}/. Work on projects using absolute paths from ${PROJECTS_DIR}/ — do NOT cd into them before running commands. When you start working in a project directory, write its absolute path to ${cwdFile} so the server can track it. To send files to the user, copy them to ${sendDir}/. Sign commits with: 🐾 Paw-Printed-By: ${agent.name} <${agent.name.toLowerCase()}@bark-pack>`;
     writeFileSync(sysPromptFile, systemPrompt);
+
+    // For backends that don't support system prompts, prepend to first message
+    let actualPrompt = prompt;
+    if (!isResume && !backend.capabilities.systemPrompt) {
+        actualPrompt = `[System Instructions]\n${systemPrompt}\n\n[User Message]\n${prompt}`;
+    }
+
+    // Write prompt and clean up previous output
+    writeFileSync(promptFile, actualPrompt);
+    writeFileSync(runningMarker, '1');
+    for (const f of [outFile, doneMarker, progressFile]) {
+        try { unlinkSync(f); } catch {}
+    }
+
+    agent.hasRun = true;
+    saveState();
 
     // cd into agent's working directory if set and still exists, otherwise stay in bark-pack
     if (agent.cwd && !existsSync(agent.cwd)) {
@@ -636,7 +649,8 @@ function resetAgents(names) {
 
     if (names.length === 1 && names[0].toLowerCase() === 'pack') {
         for (const [, agent] of agents) {
-            agent.sessionId = crypto.randomUUID();
+            const backend = backends.get(agent.backend) || backends.getDefault(DEFAULT_BACKEND);
+            agent.sessionId = backend.generateSessionId();
             agent.hasRun = false;
             agent.cwd = null;
             try { execSync(`rm -f "${path.join(TMP_DIR, agent.id)}".*`, EXEC_OPTS); } catch {}
@@ -648,7 +662,8 @@ function resetAgents(names) {
         for (const name of names) {
             const agent = findAgentByName(name);
             if (agent) {
-                agent.sessionId = crypto.randomUUID();
+                const backend = backends.get(agent.backend) || backends.getDefault(DEFAULT_BACKEND);
+                agent.sessionId = backend.generateSessionId();
                 agent.hasRun = false;
                 agent.cwd = null;
                 try { execSync(`rm -f "${path.join(TMP_DIR, agent.id)}".*`, EXEC_OPTS); } catch {}
@@ -730,15 +745,18 @@ async function runDaily(adapter) {
             const standupPrompt = 'Quick standup — answer from memory, no research or tool use. 3 lines, plain text only, no markdown:\nLine 1: what you did last\nLine 2: what\'s next\nLine 3: blockers or "no blockers"';
             writeFileSync(promptFile, standupPrompt);
 
-            const modelFlag = '--model haiku';
-            const claudeArgs = agent.hasRun
-                ? `--resume ${agent.sessionId} ${modelFlag}`
-                : `--session-id ${agent.sessionId} ${modelFlag}`;
-
-            // Write standup command to script file (same approach as runClaudeCommand)
+            // Build standup command using backend
+            const backend = backends.get(agent.backend) || backends.getDefault(DEFAULT_BACKEND);
             const displayScript = path.join(__dirname, 'stream-display.js');
-            let script = '#!/bin/bash\n';
-            script += `cat "${promptFile}" | claude -p --dangerously-skip-permissions ${claudeArgs} --output-format stream-json --verbose 2>/dev/null | node "${displayScript}" ${agent.id}.standup "${TMP_DIR}"\n`;
+            const { script } = backend.buildCommand({
+                promptFile,
+                sessionId: agent.sessionId,
+                isResume: agent.hasRun,
+                model: 'haiku',  // Force haiku for quick standups
+                streamParserScript: displayScript,
+                agentId: `${agent.id}.standup`,
+                tmpDir: TMP_DIR,
+            });
             writeFileSync(scriptFile, script, { mode: 0o755 });
 
             // Hard deadline: resolve no matter what after PUP_TIMEOUT_MS
@@ -1149,7 +1167,15 @@ async function onMessage(msg) {
                 prompt = prompt.replace(/#(haiku|sonnet|opus)\b/i, '').trim();
             }
 
-            const agent = await spawnAgent(prompt, adapter, null, listeningMsgId, msg.id, model, forceName);
+            // Parse #backend tag from prompt
+            let backendName = null;
+            const backendMatch = prompt.match(/#(claude-code|cursor|codex)\b/i);
+            if (backendMatch) {
+                backendName = backendMatch[1].toLowerCase();
+                prompt = prompt.replace(/#(claude-code|cursor|codex)\b/i, '').trim();
+            }
+
+            const agent = await spawnAgent(prompt, adapter, null, listeningMsgId, msg.id, model, forceName, backendName);
             return;
         }
         if (command === '/stop') {
@@ -1323,6 +1349,14 @@ async function onMessage(msg) {
         body = body.replace(/#(haiku|sonnet|opus)\b/i, '').trim();
     }
 
+    // Parse #backend tag (e.g. #claude-code, #cursor) and strip from body
+    let requestedBackend = null;
+    const backendMatch = body.match(/#(claude-code|cursor|codex)\b/i);
+    if (backendMatch) {
+        requestedBackend = backendMatch[1].toLowerCase();
+        body = body.replace(/#(claude-code|cursor|codex)\b/i, '').trim();
+    }
+
     // Prepend media context to body for all routes
     const fullBody = mediaContext + (body || 'Respond to the attached media.');
 
@@ -1377,7 +1411,7 @@ async function onMessage(msg) {
     }
 
     // --- Route 3: New message → spawn new agent ---
-    spawnAgent(fullBody, adapter, null, listeningMsgId, msg.id, requestedModel);
+    spawnAgent(fullBody, adapter, null, listeningMsgId, msg.id, requestedModel, null, requestedBackend);
 }
 
 // --- Adapter Lifecycle ---
