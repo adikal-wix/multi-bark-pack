@@ -8,8 +8,9 @@ Node.js, whatsapp-web.js, @slack/web-api, @slack/socket-mode, tmux, whisper.cpp 
 
 **Supported Backends:**
 - Claude Code CLI (`claude`)
-- Cursor CLI (`agent`) — planned
-- OpenAI Codex — planned
+- Cursor CLI (`cursor`)
+- OpenAI Codex CLI (`codex`)
+- Google Gemini CLI (`gemini`)
 
 ## Files
 
@@ -25,11 +26,20 @@ Node.js, whatsapp-web.js, @slack/web-api, @slack/socket-mode, tmux, whisper.cpp 
 - `stream-parsers/` — Output format handlers
   - `index.js` — Parser registry
   - `claude.js` — Claude stream-json parser
+- `history/` — Server-side conversation tracking
+  - `index.js` — History manager API
+  - `storage.js` — JSON file storage per agent
+  - `summarizer.js` — Context prompt building
+- `fallback/` — Automatic agent recovery
+  - `index.js` — Fallback orchestrator
+  - `detector.js` — Failure classification
+  - `injector.js` — Context injection
+  - `config.js` — Configuration
 - `start.sh` — Auto-restart wrapper: exits 0 → restarts, non-zero → stops
 - `agents.json` — Runtime state: active + soft-deleted agents (gitignored)
 - `routing.json` — Message ID → agent ID map, all platforms (gitignored)
 - `status.json` — Pinned status message IDs, persisted across restarts (gitignored)
-- `.bark-tmp/` — Per-agent temp files: `.prompt`, `.out`, `.done`, `.progress`, `.cwd`, `.running`, `.sh`, `.sysprompt` (gitignored)
+- `.bark-tmp/` — Per-agent temp files: `.prompt`, `.out`, `.done`, `.progress`, `.cwd`, `.running`, `.sh`, `.sysprompt`, `.history.json` (gitignored)
 - `.bark-tmp/{id}-send/` — Per-agent outbox: pups drop files here, server delivers via `sendFile()` (gitignored)
 - `projects/` — Pup working directory: repos are cloned here (gitignored, auto-created)
 - `docs/plans/` — Implementation plans
@@ -101,12 +111,19 @@ Agents are locked to their backend once spawned. `/reset` keeps the same backend
 
 **Model selection:** Add `#haiku`, `#sonnet`, or `#opus` anywhere in a message to switch that pup's model. Tag is stripped before routing. Model persists per pup.
 
+**Agent Fallback:** Server tracks conversation history per agent. When agents fail (context window, rate limit, timeout, crash), automatic recovery kicks in:
+1. **Retry** — Wait with exponential backoff, retry same session (for transient errors)
+2. **Reset** — New session on same backend with context injected (for context window)
+3. **Switch** — Switch to next backend with context injected (for persistent failures)
+
+Context is preserved via rolling summaries + recent turns. History files stored in `.bark-tmp/{id}.history.json`.
+
 ## Configuration
 
 ```bash
 # .env
 DEFAULT_BACKEND=claude-code
-ENABLED_BACKENDS=claude-code,cursor
+ENABLED_BACKENDS=claude-code,cursor,codex,gemini
 
 # Platform adapters
 WA_ENABLED=true
@@ -122,6 +139,12 @@ SLACK_OWNER=your-slack-id
 
 # Voice transcription
 WHISPER_MODEL=/opt/homebrew/share/whisper-cpp/models/ggml-base.en.bin
+
+# Agent fallback
+FALLBACK_ENABLED=true
+AGENT_TIMEOUT=600000
+FALLBACK_MAX_RETRIES=3
+FALLBACK_BACKEND_PRIORITY=claude-code,cursor,codex,gemini
 ```
 
 ## Key constraints

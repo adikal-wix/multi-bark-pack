@@ -3,6 +3,8 @@ const { createWhatsAppAdapter } = require('./adapters/whatsapp');
 const { createTelegramAdapter } = require('./adapters/telegram');
 const { createSlackAdapter } = require('./adapters/slack');
 const backends = require('./backends');
+const historyManager = require('./history');
+const fallbackManager = require('./fallback');
 const { exec, execSync } = require('child_process');
 const { writeFileSync, readFileSync, existsSync, mkdirSync, unlinkSync, readdirSync } = require('fs');
 const crypto = require('crypto');
@@ -514,6 +516,9 @@ async function spawnAgent(prompt, adapter, parentId = null, reuseMsgId = null, r
     if (liveMsgId) msgToAgent.set(liveMsgId, id);
     saveState();
 
+    // Save user turn to history
+    historyManager.addUserTurn(id, prompt);
+
     // Run first prompt, pass the live message ID for editing
     runAgentCommand(agent, prompt, adapter, liveMsgId);
 
@@ -539,6 +544,10 @@ async function sendToAgent(agent, text, adapter, reuseMsgId = null, replyToId = 
     if (replyToId) msgToAgent.set(replyToId, agent.id);
     if (liveMsgId) msgToAgent.set(liveMsgId, agent.id);
     saveState();
+
+    // Save user turn to history
+    historyManager.addUserTurn(agent.id, text);
+
     runAgentCommand(agent, text, adapter, liveMsgId);
     await updatePinnedStatus();
 }
@@ -572,6 +581,17 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
     if (!isResume && !backend.capabilities.systemPrompt) {
         actualPrompt = `[System Instructions]\n${systemPrompt}\n\n[User Message]\n${prompt}`;
     }
+
+    // Inject fallback context if present (from reset/switch recovery)
+    if (agent.fallbackContext) {
+        actualPrompt = `${agent.fallbackContext}\n\n[New Message]\n${actualPrompt}`;
+        delete agent.fallbackContext;
+        console.log(`  📦 Injected fallback context for ${agent.name}`);
+    }
+
+    // Track command start time for timeout detection
+    const commandStartTime = Date.now();
+    const commandTimeout = fallbackManager.config.timeout.commandMs;
 
     // Write prompt and clean up previous output
     writeFileSync(promptFile, actualPrompt);
@@ -649,6 +669,19 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
             } catch {}
         }
 
+        // Check for timeout
+        if (fallbackManager.detector.isTimedOut(commandStartTime, commandTimeout)) {
+            clearInterval(poll);
+            console.log(`  ⏰ ${agent.name} timed out after ${commandTimeout / 1000}s`);
+
+            // Record timeout error
+            historyManager.recordError(agent.id, 'timeout', 'Command timed out');
+
+            // Notify user
+            await adapter.edit(liveMsgId, `⏰ [${agent.name}] timed out. Reply to retry.`);
+            return;
+        }
+
         // Check if done
         if (!existsSync(doneMarker)) return;
         clearInterval(poll);
@@ -675,6 +708,45 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
         } catch {}
 
         if (!output) output = lastProgress || '(no output)';
+
+        // Read exit code and check for failure
+        let exitCode = '0';
+        try {
+            exitCode = readFileSync(doneMarker, 'utf8').trim();
+        } catch {}
+
+        // Extract tools used from progress for history
+        const toolsUsed = historyManager.extractToolsFromOutput(lastProgress || '');
+
+        // Save assistant turn to history
+        const historyResult = historyManager.addAssistantTurn(agent.id, output, {
+            tools: toolsUsed,
+            filesModified: [],  // Could parse from output if needed
+            exitCode: parseInt(exitCode, 10),
+            cwd: agent.cwd,
+        });
+
+        // Check for failure and trigger fallback
+        const failure = fallbackManager.detector.classifyFailure(output, exitCode, true);
+        if (failure && fallbackManager.config.enabled) {
+            console.log(`  ⚠️ ${agent.name} failed: ${failure.type}`);
+
+            // Execute fallback
+            const fallbackResult = await fallbackManager.executeFallback(
+                agent, failure, adapter, backends, null
+            );
+
+            if (fallbackResult.success && fallbackResult.action !== 'retry_same_session') {
+                // Notify user of fallback
+                const notification = fallbackManager.buildNotification(agent, fallbackResult, failure);
+                if (notification && liveMsgId) {
+                    await adapter.edit(liveMsgId, notification);
+                }
+                // Context was injected, agent will retry on next message
+                // Don't send the error output
+                return;
+            }
+        }
 
         const maxLen = 4096;
         const text = output.length <= maxLen
@@ -761,7 +833,8 @@ function softDeleteAgent(agent) {
 function hardDeleteAgent(agent, fromMap = agents) {
     // Kill tmux session
     try { execSync(`tmux kill-session -t "${agent.tmuxSession}" 2>/dev/null`, EXEC_OPTS); } catch {}
-    // Clean up temp files
+    // Clean up temp files and history
+    historyManager.remove(agent.id);
     try { execSync(`rm -f "${path.join(TMP_DIR, agent.id)}".*`, EXEC_OPTS); } catch {}
     // Remove routing entries pointing to this agent
     for (const [msgId, agentId] of msgToAgent) {
@@ -907,6 +980,7 @@ function resetAgents(names) {
             agent.sessionId = backend.generateSessionId();
             agent.hasRun = false;
             agent.cwd = null;
+            historyManager.clear(agent.id);
             try { execSync(`rm -f "${path.join(TMP_DIR, agent.id)}".*`, EXEC_OPTS); } catch {}
             console.log(`  🔄 Reset ${agent.name} — new session ${agent.sessionId}`);
             reset.push(agent.name);
@@ -920,6 +994,7 @@ function resetAgents(names) {
                 agent.sessionId = backend.generateSessionId();
                 agent.hasRun = false;
                 agent.cwd = null;
+                historyManager.clear(agent.id);
                 try { execSync(`rm -f "${path.join(TMP_DIR, agent.id)}".*`, EXEC_OPTS); } catch {}
                 console.log(`  🔄 Reset ${agent.name} — new session ${agent.sessionId}`);
                 reset.push(agent.name);
