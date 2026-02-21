@@ -7,6 +7,9 @@ const { exec, execSync } = require('child_process');
 const { writeFileSync, readFileSync, existsSync, mkdirSync, unlinkSync, readdirSync } = require('fs');
 const crypto = require('crypto');
 const path = require('path');
+const http = require('http');
+const express = require('express');
+const WebSocket = require('ws');
 
 // --- Config ---
 const GROUP_NAME = process.env.WA_GROUP || 'bark-pack';
@@ -30,6 +33,7 @@ const OWNER_IDS = {
 const WHISPER_MODEL = process.env.WHISPER_MODEL || '/opt/homebrew/share/whisper-cpp/models/ggml-base.en.bin';
 const DEFAULT_BACKEND = process.env.DEFAULT_BACKEND || 'claude-code';
 const ENABLED_BACKENDS = (process.env.ENABLED_BACKENDS || 'claude-code').split(',').map(s => s.trim());
+const UI_PORT = parseInt(process.env.UI_PORT || '3000', 10);
 const SHELL_PATH = process.env.PATH || '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin';
 const cleanEnv = { ...process.env, PATH: `/opt/homebrew/bin:${SHELL_PATH}` };
 delete cleanEnv.CLAUDECODE;
@@ -116,6 +120,123 @@ const deletedAgents = new Map(); // id -> deleted agent object
 const adapters = []; // active adapter instances
 const statusMsgs = {}; // adapter.name -> pinned status msgId
 
+// --- Management UI (Express + WebSocket) ---
+const app = express();
+const httpServer = http.createServer(app);
+const wss = new WebSocket.Server({ noServer: true });
+const wsClients = new Set();
+
+// Serve static files from ui/
+app.use(express.static(path.join(__dirname, 'ui')));
+app.use(express.json());
+
+// REST API: Get all agents
+app.get('/api/agents', (req, res) => {
+    const allAgents = [
+        ...[...agents.values()].map(a => ({ ...a, isRunning: existsSync(path.join(TMP_DIR, `${a.id}.running`)) })),
+        ...[...deletedAgents.values()].map(a => ({ ...a, isRunning: false })),
+    ];
+    res.json(allAgents);
+});
+
+// REST API: Get single agent
+app.get('/api/agents/:id', (req, res) => {
+    const agent = agents.get(req.params.id) || deletedAgents.get(req.params.id);
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+    res.json({
+        ...agent,
+        isRunning: existsSync(path.join(TMP_DIR, `${agent.id}.running`)),
+    });
+});
+
+// REST API: Get backends
+app.get('/api/backends', async (req, res) => {
+    const list = backends.list();
+    // Add version info
+    const results = [];
+    for (const b of list) {
+        const backend = backends.get(b.name);
+        let version = null;
+        if (backend) {
+            try { version = await backend.getVersion(); } catch {}
+        }
+        results.push({ ...b, installed: true, version });
+    }
+    res.json(results);
+});
+
+// REST API: Stop agent
+app.post('/api/agents/:id/stop', (req, res) => {
+    const agent = agents.get(req.params.id);
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+    const result = stopAgents([agent.name]);
+    broadcastAgents();
+    res.json({ success: true, stopped: result.stopped });
+});
+
+// REST API: Clear (shelve) agent
+app.post('/api/agents/:id/clear', (req, res) => {
+    const agent = agents.get(req.params.id);
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+    const result = clearAgents([agent.name]);
+    broadcastAgents();
+    res.json({ success: true, cleared: result.cleared });
+});
+
+// REST API: Delete agent permanently
+app.delete('/api/agents/:id', (req, res) => {
+    const agent = agents.get(req.params.id) || deletedAgents.get(req.params.id);
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+    const result = deleteAgents([agent.name]);
+    broadcastAgents();
+    res.json({ success: true, deleted: result.deleted });
+});
+
+// WebSocket upgrade handling
+httpServer.on('upgrade', (request, socket, head) => {
+    if (request.url === '/ws') {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+            wss.emit('connection', ws, request);
+        });
+    } else {
+        socket.destroy();
+    }
+});
+
+wss.on('connection', (ws) => {
+    wsClients.add(ws);
+    console.log(`  📡 UI client connected (${wsClients.size} total)`);
+
+    // Send initial state
+    const allAgents = [
+        ...[...agents.values()].map(a => ({ ...a, isRunning: existsSync(path.join(TMP_DIR, `${a.id}.running`)) })),
+        ...[...deletedAgents.values()].map(a => ({ ...a, isRunning: false })),
+    ];
+    ws.send(JSON.stringify({ type: 'agents', agents: allAgents }));
+
+    ws.on('close', () => {
+        wsClients.delete(ws);
+        console.log(`  📡 UI client disconnected (${wsClients.size} remaining)`);
+    });
+
+    ws.on('error', () => {
+        wsClients.delete(ws);
+    });
+});
+
+// Broadcast agents to all WebSocket clients
+function broadcastAgents() {
+    if (wsClients.size === 0) return;
+    const allAgents = [
+        ...[...agents.values()].map(a => ({ ...a, isRunning: existsSync(path.join(TMP_DIR, `${a.id}.running`)) })),
+        ...[...deletedAgents.values()].map(a => ({ ...a, isRunning: false })),
+    ];
+    const msg = JSON.stringify({ type: 'agents', agents: allAgents });
+    for (const ws of wsClients) {
+        try { ws.send(msg); } catch {}
+    }
+}
+
 function genId() {
     return crypto.randomBytes(3).toString('hex');
 }
@@ -153,6 +274,9 @@ function saveState() {
 
     // Save pinned status message IDs so we can unpin them after restart
     writeFileSync(STATUS_FILE, JSON.stringify(statusMsgs));
+
+    // Broadcast to UI clients
+    broadcastAgents();
 }
 
 function loadState() {
@@ -1520,6 +1644,11 @@ async function main() {
     }
     await updatePinnedStatus();
 
+    // Start Management UI HTTP server
+    httpServer.listen(UI_PORT, () => {
+        console.log(`Management UI available at http://localhost:${UI_PORT}`);
+    });
+
     console.log(`bark-pack running with ${adapters.length} adapter(s): ${adapters.map(a => a.name).join(', ')}`);
 }
 
@@ -1557,6 +1686,11 @@ module.exports = {
     TMP_DIR,
     PROJECTS_DIR,
     DEFAULT_BACKEND,
+
+    // UI
+    broadcastAgents,
+    httpServer,
+    app,
 };
 
 // Only run main() when executed directly (not when required as module)

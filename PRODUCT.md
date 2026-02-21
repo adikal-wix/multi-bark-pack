@@ -248,44 +248,39 @@ Additional backend candidates for later.
 ### Phase 6: Management UI
 Web dashboard for pack visibility and control.
 
-**Core Features (read-only):**
-- [ ] Dashboard showing all pups with live status
-- [ ] Pup detail view — conversation history, stats
-- [ ] Backend status — installed, versions, capabilities
+**MVP Features (implemented):**
+- [x] Dashboard showing all pups with live status
+- [x] Pup detail view — metadata, backend, model, cwd, session info
+- [x] Backend status — installed, versions
+- [x] Stop/clear/delete pups from UI
+- [x] WebSocket for live pup status updates
+- [x] UI served at `http://localhost:3000` (configurable via `UI_PORT`)
+
+**Future enhancements:**
 - [ ] Platform status — connected adapters, health
-- [ ] Routing table viewer
 - [ ] Cost/usage metrics (when available)
-
-**Control Features (read-write):**
-- [ ] Stop/clear/delete pups from UI
-- [ ] Reset pup memory
+- [ ] Reset pup memory from UI
 - [ ] Edit configuration (.env values)
-- [ ] Enable/disable backends
-- [ ] Test platform connections
-
-**Real-time Features:**
-- [ ] WebSocket for live pup status updates
 - [ ] Stream pup progress to browser
 - [ ] Live log viewer
 - [ ] Embedded terminal (xterm.js) to watch tmux sessions
 
 **Technical Stack:**
-- Express.js server (alongside existing server)
-- WebSocket (ws or socket.io) for real-time
-- Simple frontend (vanilla JS or lightweight framework)
-- xterm.js for terminal embedding
+- Express.js server (integrated into server.js)
+- WebSocket via `ws` package for real-time
+- Vanilla HTML/CSS/JS frontend (no framework)
+- CRT scan-line terminal aesthetic
 
 **Deliverables:**
-- [ ] `/ui` directory with frontend code
-- [ ] REST API endpoints for data
-- [ ] WebSocket server for live updates
-- [ ] UI served at `http://localhost:3000` (configurable port)
+- [x] `ui/index.html` — single-file dashboard with embedded CSS/JS
+- [x] REST API endpoints (`/api/agents`, `/api/backends`, etc.)
+- [x] WebSocket server (`/ws`) for live updates
 
 **Success criteria:** Can monitor and manage pack without using chat
 
-**How to test:** Open `http://localhost:3000`, see all pups, click to view details, use controls to stop/clear pups, watch live terminal output.
+**How to test:** Start server, open `http://localhost:3000`, see all pups and backends, click pup to view details, use stop/clear/delete controls, verify live updates via WebSocket.
 
-**Status:** Not started
+**Status:** ✅ Complete (MVP)
 
 ---
 
@@ -309,8 +304,8 @@ Track token usage and costs (where available).
 
 ## Current Status
 
-**Phase:** 5 (Additional Backends) — Complete
-**Next:** Phase 6 (Management UI)
+**Phase:** 6 (Management UI) — Complete
+**Next:** Phase 7 (Cost & Usage Tracking) or additional UI enhancements
 
 **Working:**
 - Backend abstraction layer
@@ -323,11 +318,15 @@ Track token usage and costs (where available).
 - Backend selection via `#backend` tags
 - `/backends` capability matrix
 - Graceful degradation for missing capabilities
+- Management UI at `http://localhost:3000`
+- REST API for agent/backend data
+- WebSocket for live status updates
 
 **Tested:**
 - 44 automated tests passing
 - All 4 backends detected and working
 - Stream parsers for all backends verified
+- UI renders with terminal aesthetic
 
 ---
 
@@ -393,3 +392,4 @@ Track token usage and costs (where available).
 | 2024-02-21 | Phase 4 complete — capability matrix and graceful degradation |
 | 2024-02-21 | Phase 5a complete — Codex backend (OpenAI) |
 | 2024-02-21 | Phase 5b complete — Gemini backend (Google) |
+| 2024-02-21 | Phase 6 complete — Management UI (Express + WebSocket dashboard) |
