@@ -369,6 +369,10 @@
             box-shadow: 0 0 8px var(--amber);
         }
 
+        .agent-pack-icon {
+            font-size: 1.1rem;
+        }
+
         .agent-name {
             font-size: 1.1rem;
             font-weight: 600;
@@ -841,6 +845,12 @@
             letter-spacing: 0.5px;
         }
 
+        .pack-icon {
+            font-size: 1.1rem;
+            width: 24px;
+            text-align: center;
+        }
+
         .pack-name {
             flex: 1;
             font-size: 0.9rem;
@@ -1153,6 +1163,7 @@
             <div class="modal-header">
                 <div class="modal-title">
                     <span class="agent-status-led" id="modal-led"></span>
+                    <span class="agent-pack-icon" id="modal-icon"></span>
                     <span class="modal-name" id="modal-name"></span>
                     <span class="agent-backend" id="modal-backend"></span>
                 </div>
@@ -1462,6 +1473,7 @@
                 shelvedGrid.innerHTML = shelved.map(agent => `
                     <div class="shelved-card" data-id="${agent.id}">
                         <div class="shelved-header">
+                            <span class="agent-pack-icon">${getPackIcon(agent)}</span>
                             <span class="shelved-name">${agent.name}</span>
                             <span class="agent-backend">${agent.backend}</span>
                         </div>
@@ -1515,15 +1527,38 @@
             });
         }
 
+        function getPackIcon(agent) {
+            if (agent.packId && packsData.packs[agent.packId]) {
+                const pack = packsData.packs[agent.packId];
+                // Check for per-name icon
+                if (pack.icons && pack.names) {
+                    // Extract base name (remove adjective prefix if present)
+                    const baseName = agent.name.includes('-')
+                        ? agent.name.split('-').pop()
+                        : agent.name;
+                    const nameIndex = pack.names.findIndex(n =>
+                        n === baseName || n === agent.name
+                    );
+                    if (nameIndex >= 0 && pack.icons[nameIndex]) {
+                        return pack.icons[nameIndex];
+                    }
+                }
+                return pack.icon || '🐕';
+            }
+            return '🐕';
+        }
+
         function renderAgentCard(agent) {
             const statusClass = getStatusClass(agent);
             const statusText = agent.statusText || getDefaultStatusText(agent);
+            const packIcon = getPackIcon(agent);
 
             return `
                 <div class="agent-card status-${statusClass}" data-id="${agent.id}">
                     <div class="agent-header">
                         <div class="agent-identity">
                             <span class="agent-status-led ${statusClass}"></span>
+                            <span class="agent-pack-icon">${packIcon}</span>
                             <span class="agent-name">${agent.name}</span>
                         </div>
                         <span class="agent-backend">${agent.backend}</span>
@@ -1570,6 +1605,7 @@
 
             packItems.innerHTML = packs.map(pack => `
                 <div class="pack-item ${pack.id === packsData.activePack ? 'active' : ''} ${pack.id === selectedPackId ? 'selected' : ''}" data-id="${pack.id}">
+                    <span class="pack-icon">${pack.icon || '📦'}</span>
                     <span class="pack-name">${pack.name}</span>
                     ${pack.id === packsData.activePack ? '<span class="pack-active-badge">Active</span>' : ''}
                     ${pack.builtin ? '<span class="pack-builtin-badge">Builtin</span>' : ''}
@@ -1731,6 +1767,7 @@
             const statusClass = getStatusClass(agent);
 
             document.getElementById('modal-led').className = `agent-status-led ${statusClass}`;
+            document.getElementById('modal-icon').textContent = getPackIcon(agent);
             document.getElementById('modal-name').textContent = agent.name;
             document.getElementById('modal-backend').textContent = agent.backend;
             document.getElementById('modal-session').textContent = agent.sessionId || '—';

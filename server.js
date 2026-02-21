@@ -92,6 +92,26 @@ function getActivePack() {
     return packsData.packs[packsData.activePack] || Object.values(packsData.packs)[0];
 }
 
+function getAgentIcon(agent) {
+    if (agent.packId && packsData.packs[agent.packId]) {
+        const pack = packsData.packs[agent.packId];
+        // Check for per-name icon
+        if (pack.icons && pack.names) {
+            const baseName = agent.name.includes('-')
+                ? agent.name.split('-').pop()
+                : agent.name;
+            const nameIndex = pack.names.findIndex(n =>
+                n === baseName || n === agent.name
+            );
+            if (nameIndex >= 0 && pack.icons[nameIndex]) {
+                return pack.icons[nameIndex];
+            }
+        }
+        return pack.icon || '🐕';
+    }
+    return '🐕';
+}
+
 function getPacks() {
     return packsData;
 }
@@ -470,6 +490,7 @@ async function spawnAgent(prompt, adapter, parentId = null, reuseMsgId = null, r
         parentId,
         createdAt: new Date().toISOString(),
         source: adapter.name,
+        packId: packsData.activePack,
     };
     agents.set(id, agent);
     saveState();
@@ -480,11 +501,12 @@ async function spawnAgent(prompt, adapter, parentId = null, reuseMsgId = null, r
     // Send one message that will be edited through the whole lifecycle:
     // "listening..." (voice) → "thinking..." → tool progress → final response
     let liveMsgId;
+    const icon = getAgentIcon(agent);
     if (reuseMsgId) {
         liveMsgId = reuseMsgId;
-        await adapter.edit(reuseMsgId, `🐕 [${name}]:\n_thinking..._`);
+        await adapter.edit(reuseMsgId, `${icon} [${name}]:\n_thinking..._`);
     } else {
-        liveMsgId = await adapter.send(`🐕 [${name}]:\n_thinking..._`, replyToId);
+        liveMsgId = await adapter.send(`${icon} [${name}]:\n_thinking..._`, replyToId);
     }
     // Map both the user's original message AND the pup's response to this agent.
     // This way, Slack thread replies (which point to the thread parent = user's msg) route correctly.
@@ -507,11 +529,12 @@ async function sendToAgent(agent, text, adapter, reuseMsgId = null, replyToId = 
     console.log(`  📤 Sent to ${agent.name}: ${text.substring(0, 80)}`);
     // For follow-ups, send a thinking message that will be edited
     let liveMsgId;
+    const icon = getAgentIcon(agent);
     if (reuseMsgId) {
         liveMsgId = reuseMsgId;
-        await adapter.edit(reuseMsgId, `🐕 [${agent.name}]:\n_thinking..._`);
+        await adapter.edit(reuseMsgId, `${icon} [${agent.name}]:\n_thinking..._`);
     } else {
-        liveMsgId = await adapter.send(`🐕 [${agent.name}]:\n_thinking..._`, replyToId);
+        liveMsgId = await adapter.send(`${icon} [${agent.name}]:\n_thinking..._`, replyToId);
     }
     if (replyToId) msgToAgent.set(replyToId, agent.id);
     if (liveMsgId) msgToAgent.set(liveMsgId, agent.id);
@@ -523,6 +546,7 @@ async function sendToAgent(agent, text, adapter, reuseMsgId = null, replyToId = 
 function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
     // Get the backend for this agent
     const backend = backends.get(agent.backend) || backends.getDefault(DEFAULT_BACKEND);
+    const icon = getAgentIcon(agent);
 
     const promptFile = path.join(TMP_DIR, `${agent.id}.prompt`);
     const outFile = path.join(TMP_DIR, `${agent.id}.out`);
@@ -620,7 +644,7 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
                     const preview = progress.length <= maxLen
                         ? progress
                         : progress.substring(0, maxLen) + '...';
-                    await adapter.edit(liveMsgId, `🐕 [${agent.name}]:\n${preview}`);
+                    await adapter.edit(liveMsgId, `${icon} [${agent.name}]:\n${preview}`);
                 }
             } catch {}
         }
@@ -654,8 +678,8 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
 
         const maxLen = 4096;
         const text = output.length <= maxLen
-            ? `🐕 [${agent.name}]:\n\n${output}`
-            : `🐕 [${agent.name}] (truncated):\n\n${output.substring(0, maxLen)}...`;
+            ? `${icon} [${agent.name}]:\n\n${output}`
+            : `${icon} [${agent.name}] (truncated):\n\n${output.substring(0, maxLen)}...`;
 
         // Final edit or send new message
         if (liveMsgId) {
