@@ -1416,12 +1416,15 @@ async function onMessage(msg) {
             const pupName = args[1]?.replace(/^@/, '');
 
             if (!skillName) {
-                await adapter.send('Usage: `/skill <skill-name> [@pup]`\n\nUse `/skills` to see available skills.');
+                // Show available skills inline
+                const available = skillsManager.list(true).map(s => `\`${s.id}\``).join(', ');
+                await adapter.send(`Usage: \`/skill <name> [@pup]\`\n\nAvailable: ${available}`);
                 return;
             }
 
             if (!skillsManager.has(skillName)) {
-                await adapter.send(`Unknown skill: \`${skillName}\`\n\nUse \`/skills\` to see available skills.`);
+                const available = skillsManager.list(true).map(s => `\`${s.id}\``).join(', ');
+                await adapter.send(`Unknown skill: \`${skillName}\`\n\nAvailable: ${available}`);
                 return;
             }
 
