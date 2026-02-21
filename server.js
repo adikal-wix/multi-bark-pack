@@ -494,6 +494,7 @@ async function spawnAgent(prompt, adapter, parentId = null, reuseMsgId = null, r
         createdAt: new Date().toISOString(),
         source: adapter.name,
         packId: packsData.activePack,
+        skills: ['developer'],  // Default skill for all pups
     };
     agents.set(id, agent);
     saveState();
