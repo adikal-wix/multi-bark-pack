@@ -15,7 +15,7 @@ const backends = require('./setup/backends');
 const adapters = require('./setup/adapters');
 const envWriter = require('./setup/env-writer');
 
-const PORT = 3333;
+const PORT = 3334;
 const app = express();
 const server = http.createServer(app);
 
@@ -176,7 +176,7 @@ server.listen(PORT, () => {
     console.log('  ╔══════════════════════════════════════╗');
     console.log('  ║     bark-pack // setup wizard        ║');
     console.log('  ╠══════════════════════════════════════╣');
-    console.log(`  ║  http://localhost:${PORT}               ║`);
+    console.log(`  ║  http://localhost:${PORT}              ║`);
     console.log('  ╚══════════════════════════════════════╝');
     console.log('');
 });
