@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>bark-pack // setup wizard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #05080a;
+            --bg-panel: #0a0e12;
+            --bg-card: #0d1117;
+            --bg-hover: #161b22;
+            --border: #21262d;
+            --border-glow: #30363d;
+            --phosphor: #00ff41;
+            --phosphor-dim: #00cc33;
+            --phosphor-glow: rgba(0, 255, 65, 0.15);
+            --phosphor-text: #b8ffca;
+            --amber: #ffb000;
+            --amber-glow: rgba(255, 176, 0, 0.2);
+            --cyan: #00d4ff;
+            --cyan-glow: rgba(0, 212, 255, 0.2);
+            --red: #ff3366;
+            --red-glow: rgba(255, 51, 102, 0.2);
+            --text: #e6edf3;
+            --text-dim: #c9d1d9;
+            --text-muted: #8b949e;
+            --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+            --radius: 4px;
+        }
+        [data-theme="light"] {
+            --bg-deep: #f6f8fa; --bg-panel: #ffffff; --bg-card: #ffffff;
+            --bg-hover: #f3f4f6; --border: #d0d7de; --border-glow: #afb8c1;
+            --phosphor: #1a7f37; --phosphor-dim: #238636;
+            --phosphor-glow: rgba(26, 127, 55, 0.15); --phosphor-text: #1a7f37;
+            --amber: #bf8700; --amber-glow: rgba(191, 135, 0, 0.15);
+            --cyan: #0969da; --cyan-glow: rgba(9, 105, 218, 0.15);
+            --red: #cf222e; --red-glow: rgba(207, 34, 46, 0.15);
+            --text: #1f2328; --text-dim: #57606a; --text-muted: #6e7781;
+        }
+        [data-theme="light"] body::before, [data-theme="light"] body::after { display: none; }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { font-size: 14px; }
+        body {
+            font-family: var(--font-mono);
+            background: var(--bg-deep);
+            color: var(--text);
+            min-height: 100vh;
+            position: relative;
+        }
+        body::before {
+            content: '';
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.15) 2px, rgba(0,0,0,0.15) 4px);
+            pointer-events: none; z-index: 9999;
+        }
+        body::after {
+            content: '';
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(ellipse at center, transparent 0%, transparent 60%, rgba(0,0,0,0.4) 100%);
+            pointer-events: none; z-index: 9998;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 24px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        header {
+            margin-bottom: 32px;
+            text-align: center;
+        }
+        .logo-icon {
+            font-size: 3rem;
+            filter: drop-shadow(0 0 8px var(--phosphor));
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+        @keyframes pulse-glow {
+            0%, 100% { filter: drop-shadow(0 0 8px var(--phosphor)); }
+            50% { filter: drop-shadow(0 0 16px var(--phosphor)) drop-shadow(0 0 24px var(--phosphor-glow)); }
+        }
+        .logo-text {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--phosphor);
+            text-shadow: 0 0 20px var(--phosphor-glow), 0 0 40px var(--phosphor-glow);
+        }
+        .logo-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-top: 4px;
+        }
+        .theme-toggle {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+        }
+        .theme-toggle-btn {
+            width: 36px; height: 20px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            cursor: pointer;
+            position: relative;
+        }
+        .theme-toggle-btn::after {
+            content: '';
+            position: absolute; top: 2px; left: 2px;
+            width: 14px; height: 14px;
+            background: var(--text-dim);
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+        [data-theme="light"] .theme-toggle-btn::after {
+            left: 18px; background: var(--phosphor);
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            margin-bottom: 32px;
+            padding: 0 16px;
+        }
+        .progress-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 0 0 auto;
+            cursor: pointer;
+            position: relative;
+        }
+        .progress-dot {
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            background: var(--bg-panel);
+            border: 2px solid var(--border);
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
+        }
+        .progress-step.active .progress-dot {
+            background: var(--phosphor);
+            border-color: var(--phosphor);
+            box-shadow: 0 0 8px var(--phosphor);
+        }
+        .progress-step.completed .progress-dot {
+            background: var(--phosphor-dim);
+            border-color: var(--phosphor-dim);
+        }
+        .progress-label {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            margin-top: 6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            white-space: nowrap;
+        }
+        .progress-step.active .progress-label { color: var(--phosphor); }
+        .progress-line {
+            flex: 1;
+            height: 2px;
+            background: var(--border);
+            margin: 0 -1px;
+            margin-bottom: 18px;
+        }
+        .progress-line.completed { background: var(--phosphor-dim); }
+
+        /* Wizard Content */
+        .wizard-content {
+            flex: 1;
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 32px;
+            position: relative;
+            overflow-y: auto;
+        }
+        .step { display: none; }
+        .step.active { display: block; }
+
+        .step-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--phosphor);
+            margin-bottom: 8px;
+        }
+        .step-desc {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+        .card:hover { border-color: var(--border-glow); }
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .card-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .card-desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* Status LED */
+        .led {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .led-green { background: #00ff41; box-shadow: 0 0 8px #00ff41; }
+        .led-red { background: #ff3366; box-shadow: 0 0 8px #ff3366; }
+        .led-amber { background: #ffb000; box-shadow: 0 0 8px #ffb000; }
+        .led-gray { background: #555; }
+        .led-cyan { background: #00d4ff; box-shadow: 0 0 8px #00d4ff; animation: blink 1s ease-in-out infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        /* Buttons */
+        .btn {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text);
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn:hover { border-color: var(--phosphor); color: var(--phosphor); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-primary {
+            background: var(--phosphor);
+            color: var(--bg-deep);
+            border-color: var(--phosphor);
+            font-weight: 600;
+        }
+        .btn-primary:hover { background: var(--phosphor-dim); border-color: var(--phosphor-dim); color: var(--bg-deep); }
+        .btn-sm { padding: 4px 10px; font-size: 0.75rem; }
+        .btn-danger { border-color: var(--red); color: var(--red); }
+        .btn-danger:hover { background: var(--red); color: var(--bg-deep); }
+
+        /* Navigation */
+        .wizard-nav {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        /* Inputs */
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-label {
+            display: block;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 8px 12px;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            background: var(--bg-deep);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            outline: none;
+        }
+        .form-input:focus { border-color: var(--phosphor); }
+        .form-input::placeholder { color: var(--text-muted); }
+        .form-hint {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* Toggle */
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 8px;
+        }
+        .toggle-label { font-size: 0.9rem; font-weight: 500; }
+        .toggle {
+            width: 40px; height: 22px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+        }
+        .toggle.on { background: var(--phosphor); border-color: var(--phosphor); }
+        .toggle::after {
+            content: '';
+            position: absolute; top: 2px; left: 2px;
+            width: 16px; height: 16px;
+            background: var(--text);
+            border-radius: 50%;
+            transition: all 0.2s;
+        }
+        .toggle.on::after { left: 20px; background: var(--bg-deep); }
+
+        /* Checkbox cards */
+        .check-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .check-card:hover { border-color: var(--border-glow); }
+        .check-card.selected { border-color: var(--phosphor); background: rgba(0, 255, 65, 0.05); }
+        .check-box {
+            width: 18px; height: 18px;
+            border: 2px solid var(--border);
+            border-radius: 3px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            transition: all 0.2s;
+        }
+        .check-card.selected .check-box {
+            background: var(--phosphor);
+            border-color: var(--phosphor);
+            color: var(--bg-deep);
+        }
+        .check-info { flex: 1; }
+        .check-name { font-weight: 600; font-size: 0.9rem; }
+        .check-detail { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+        .check-actions { display: flex; gap: 6px; align-items: center; }
+
+        /* Log output */
+        .log-output {
+            background: var(--bg-deep);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            max-height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin-top: 8px;
+            display: none;
+        }
+        .log-output.visible { display: block; }
+
+        /* Select */
+        .form-select {
+            width: 100%;
+            padding: 8px 12px;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            background: var(--bg-deep);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            outline: none;
+            appearance: none;
+        }
+        .form-select:focus { border-color: var(--phosphor); }
+
+        /* Review section */
+        .review-section {
+            margin-bottom: 16px;
+        }
+        .review-title {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+        .review-items {
+            padding: 10px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+        .review-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 0.85rem;
+        }
+        .review-value { color: var(--phosphor); }
+
+        /* Success banner */
+        .success-banner {
+            text-align: center;
+            padding: 32px;
+        }
+        .success-icon { font-size: 3rem; margin-bottom: 16px; }
+        .success-text { font-size: 1.1rem; color: var(--phosphor); margin-bottom: 8px; }
+        .success-sub { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 24px; }
+        .code-block {
+            background: var(--bg-deep);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px 16px;
+            font-size: 0.9rem;
+            color: var(--phosphor);
+            display: inline-block;
+            margin-bottom: 16px;
+        }
+
+        /* Adapter config panel */
+        .adapter-config {
+            display: none;
+            margin-top: 12px;
+            padding: 16px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+        }
+        .adapter-config.visible { display: block; }
+        .adapter-instructions {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            white-space: pre-wrap;
+            line-height: 1.5;
+            margin-bottom: 12px;
+            padding: 8px;
+            background: var(--bg-card);
+            border-radius: var(--radius);
+        }
+    </style>
+</head>
+<body>
+    <div class="theme-toggle">
+        <div class="theme-toggle-btn" onclick="toggleTheme()"></div>
+    </div>
+
+    <div class="container">
+        <header>
+            <div class="logo-icon">&#x1F43E;</div>
+            <div class="logo-text">bark-pack</div>
+            <div class="logo-subtitle">setup wizard</div>
+        </header>
+
+        <div class="progress-bar" id="progressBar"></div>
+
+        <div class="wizard-content">
+            <!-- Step 0: Welcome -->
+            <div class="step active" data-step="0">
+                <div style="text-align:center; padding: 40px 0;">
+                    <div class="step-title" style="font-size:1.5rem; margin-bottom:16px;">Welcome to bark-pack</div>
+                    <div class="step-desc" style="max-width:500px; margin:0 auto 32px;">
+                        Multi-platform, multi-backend AI agent swarm.<br>
+                        This wizard will guide you through installation and configuration.
+                    </div>
+                    <div style="color:var(--text-muted); font-size:0.8rem; margin-bottom:32px;">
+                        We'll check prerequisites, install backends,<br>
+                        set up chat channels, and generate your config.
+                    </div>
+                    <button class="btn btn-primary" onclick="goToStep(1)" style="padding:12px 32px; font-size:0.95rem;">
+                        Get Started
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 1: Prerequisites -->
+            <div class="step" data-step="1">
+                <div class="step-title">Prerequisites</div>
+                <div class="step-desc">Checking system dependencies. Required items must be installed to proceed.</div>
+                <div id="prereqList"></div>
+                <div class="log-output" id="prereqLog"></div>
+                <div class="wizard-nav">
+                    <button class="btn" onclick="goToStep(0)">Back</button>
+                    <button class="btn btn-primary" id="prereqNext" onclick="goToStep(2)">Next</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Backend Selection -->
+            <div class="step" data-step="2">
+                <div class="step-title">Backend Selection</div>
+                <div class="step-desc">Choose which LLM backends to enable. At least one is required.</div>
+                <div id="backendList"></div>
+                <div class="log-output" id="backendLog"></div>
+                <div class="wizard-nav">
+                    <button class="btn" onclick="goToStep(1)">Back</button>
+                    <button class="btn btn-primary" id="backendNext" onclick="goToStep(3)">Next</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Backend Auth -->
+            <div class="step" data-step="3">
+                <div class="step-title">Backend Authentication</div>
+                <div class="step-desc">Verify each selected backend is working and authenticated.</div>
+                <div id="authList"></div>
+                <div class="log-output" id="authLog"></div>
+                <div class="wizard-nav">
+                    <button class="btn" onclick="goToStep(2)">Back</button>
+                    <button class="btn btn-primary" id="authNext" onclick="goToStep(4)">Next</button>
+                </div>
+            </div>
+
+            <!-- Step 4: Channels -->
+            <div class="step" data-step="4">
+                <div class="step-title">Chat Channels</div>
+                <div class="step-desc">Configure at least one messaging platform.</div>
+                <div id="adapterList"></div>
+                <div class="wizard-nav">
+                    <button class="btn" onclick="goToStep(3)">Back</button>
+                    <button class="btn btn-primary" id="channelNext" onclick="goToStep(5)">Next</button>
+                </div>
+            </div>
+
+            <!-- Step 5: Advanced -->
+            <div class="step" data-step="5">
+                <div class="step-title">Advanced Settings</div>
+                <div class="step-desc">Optional configuration. Defaults work well for most setups.</div>
+                <div id="advancedForm">
+                    <div class="form-group">
+                        <label class="form-label">Default Backend</label>
+                        <select class="form-select" id="defaultBackend"></select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">UI Dashboard Port</label>
+                        <input class="form-input" id="uiPort" value="3333" placeholder="3333">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Agent Timeout (ms)</label>
+                        <input class="form-input" id="agentTimeout" value="600000" placeholder="600000">
+                        <div class="form-hint">10 minutes default. Agents killed after this timeout.</div>
+                    </div>
+                    <div class="toggle-row">
+                        <span class="toggle-label">Enable Agent Fallback</span>
+                        <div class="toggle on" id="fallbackToggle" onclick="this.classList.toggle('on')"></div>
+                    </div>
+                </div>
+                <div class="wizard-nav">
+                    <button class="btn" onclick="goToStep(4)">Back</button>
+                    <button class="btn btn-primary" onclick="goToStep(6)">Next</button>
+                </div>
+            </div>
+
+            <!-- Step 6: Review & Launch -->
+            <div class="step" data-step="6">
+                <div id="reviewContent"></div>
+                <div id="launchArea" style="display:none;"></div>
+                <div class="wizard-nav" id="reviewNav">
+                    <button class="btn" onclick="goToStep(5)">Back</button>
+                    <button class="btn btn-primary" onclick="saveAndLaunch()">Save .env & Finish</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// ── State ──
+const state = {
+    currentStep: 0,
+    prereqs: [],
+    backends: [],
+    selectedBackends: new Set(),
+    backendAuth: {},   // name -> { tested, success }
+    adapters: {},      // name -> { enabled, config: {} }
+    geminiKey: '',
+};
+
+const STEPS = [
+    { label: 'Welcome' },
+    { label: 'Prereqs' },
+    { label: 'Backends' },
+    { label: 'Auth' },
+    { label: 'Channels' },
+    { label: 'Advanced' },
+    { label: 'Launch' },
+];
+
+// ── WebSocket ──
+let ws = null;
+function connectWS() {
+    ws = new WebSocket(`ws://${location.host}/ws`);
+    ws.onmessage = e => {
+        const msg = JSON.parse(e.data);
+        handleWSMessage(msg);
+    };
+    ws.onclose = () => setTimeout(connectWS, 2000);
+}
+connectWS();
+
+function handleWSMessage(msg) {
+    if (msg.type === 'install_stream' || msg.type === 'auth_stream') {
+        // Strip ANSI codes for display
+        const clean = msg.data.replace(/\x1b\[[0-9;]*m/g, '');
+        appendLog(clean);
+    }
+    if (msg.type === 'install_done' || msg.type === 'auth_done') {
+        if (msg.success) {
+            appendLog('--- Done ---\n');
+        } else {
+            appendLog(`--- Failed: ${msg.error || 'unknown'} ---\n`);
+        }
+    }
+}
+
+let currentLogEl = null;
+function appendLog(text) {
+    if (!currentLogEl) return;
+    currentLogEl.classList.add('visible');
+    currentLogEl.textContent += text;
+    currentLogEl.scrollTop = currentLogEl.scrollHeight;
+}
+
+// ── Theme ──
+function toggleTheme() {
+    const html = document.documentElement;
+    const next = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+}
+if (localStorage.getItem('theme') === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+}
+
+// ── Progress Bar ──
+function renderProgress() {
+    const bar = document.getElementById('progressBar');
+    bar.innerHTML = '';
+    STEPS.forEach((s, i) => {
+        if (i > 0) {
+            const line = document.createElement('div');
+            line.className = 'progress-line' + (i <= state.currentStep ? ' completed' : '');
+            bar.appendChild(line);
+        }
+        const step = document.createElement('div');
+        step.className = 'progress-step' + (i === state.currentStep ? ' active' : '') + (i < state.currentStep ? ' completed' : '');
+        step.innerHTML = `<div class="progress-dot"></div><div class="progress-label">${s.label}</div>`;
+        if (i <= state.currentStep) step.onclick = () => goToStep(i);
+        bar.appendChild(step);
+    });
+}
+
+// ── Navigation ──
+function goToStep(n) {
+    state.currentStep = n;
+    document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
+    document.querySelector(`.step[data-step="${n}"]`).classList.add('active');
+    renderProgress();
+
+    if (n === 1) loadPrereqs();
+    if (n === 2) loadBackends();
+    if (n === 3) renderAuthStep();
+    if (n === 4) renderAdapters();
+    if (n === 5) renderAdvanced();
+    if (n === 6) renderReview();
+}
+
+// ── Step 1: Prerequisites ──
+async function loadPrereqs() {
+    const list = document.getElementById('prereqList');
+    list.innerHTML = '<div style="color:var(--text-muted)">Checking...</div>';
+    try {
+        const res = await fetch('/api/setup/prerequisites');
+        state.prereqs = await res.json();
+        renderPrereqs();
+    } catch (e) {
+        list.innerHTML = `<div style="color:var(--red)">Failed: ${e.message}</div>`;
+    }
+}
+
+function renderPrereqs() {
+    const list = document.getElementById('prereqList');
+    list.innerHTML = '';
+    let allRequired = true;
+    state.prereqs.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const ledClass = p.installed ? 'led-green' : (p.required ? 'led-red' : 'led-gray');
+        const status = p.installed ? p.version : (p.required ? 'REQUIRED' : 'optional');
+        card.innerHTML = `
+            <div class="card-header">
+                <div class="led ${ledClass}"></div>
+                <div class="card-title">${p.displayName}</div>
+                <div style="margin-left:auto; font-size:0.75rem; color:var(--text-muted)">${status}</div>
+                ${!p.installed ? `<button class="btn btn-sm" onclick="installPrereq('${p.name}', this)">Install</button>` : ''}
+            </div>
+            ${p.description ? `<div class="card-desc">${p.description}</div>` : ''}
+        `;
+        list.appendChild(card);
+        if (p.required && !p.installed) allRequired = false;
+    });
+    document.getElementById('prereqNext').disabled = !allRequired;
+}
+
+async function installPrereq(name, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Installing...';
+    currentLogEl = document.getElementById('prereqLog');
+    currentLogEl.textContent = '';
+    try {
+        await fetch('/api/setup/prerequisites/install', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+        });
+        await loadPrereqs();
+    } catch (e) {
+        appendLog('Error: ' + e.message + '\n');
+    }
+}
+
+// ── Step 2: Backend Selection ──
+async function loadBackends() {
+    const list = document.getElementById('backendList');
+    list.innerHTML = '<div style="color:var(--text-muted)">Checking...</div>';
+    try {
+        const res = await fetch('/api/setup/backends');
+        state.backends = await res.json();
+        renderBackends();
+    } catch (e) {
+        list.innerHTML = `<div style="color:var(--red)">Failed: ${e.message}</div>`;
+    }
+}
+
+function renderBackends() {
+    const list = document.getElementById('backendList');
+    list.innerHTML = '';
+    state.backends.forEach(b => {
+        const selected = state.selectedBackends.has(b.name);
+        const card = document.createElement('div');
+        card.className = 'check-card' + (selected ? ' selected' : '');
+        const ledClass = b.installed ? 'led-green' : 'led-gray';
+        const versionText = b.installed ? `v${b.version || '?'}` : 'not installed';
+        card.innerHTML = `
+            <div class="check-box">${selected ? '&#10003;' : ''}</div>
+            <div class="check-info">
+                <div class="check-name">${b.displayName}</div>
+                <div class="check-detail">${versionText} &middot; Models: ${b.models.join(', ')}</div>
+            </div>
+            <div class="check-actions">
+                <div class="led ${ledClass}"></div>
+                ${!b.installed ? `<button class="btn btn-sm" onclick="event.stopPropagation(); installBackend('${b.name}', this)">Install</button>` : ''}
+            </div>
+        `;
+        card.onclick = () => {
+            if (state.selectedBackends.has(b.name)) {
+                state.selectedBackends.delete(b.name);
+            } else {
+                state.selectedBackends.add(b.name);
+            }
+            renderBackends();
+        };
+        list.appendChild(card);
+    });
+    document.getElementById('backendNext').disabled = state.selectedBackends.size === 0;
+}
+
+async function installBackend(name, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Installing...';
+    currentLogEl = document.getElementById('backendLog');
+    currentLogEl.textContent = '';
+    try {
+        await fetch(`/api/setup/backends/${name}/install`, { method: 'POST' });
+        await loadBackends();
+    } catch (e) {
+        appendLog('Error: ' + e.message + '\n');
+    }
+}
+
+// ── Step 3: Backend Auth ──
+function renderAuthStep() {
+    const list = document.getElementById('authList');
+    list.innerHTML = '';
+
+    for (const name of state.selectedBackends) {
+        const b = state.backends.find(x => x.name === name);
+        if (!b) continue;
+        const auth = state.backendAuth[name] || { tested: false, success: false };
+        const ledClass = !auth.tested ? 'led-gray' : (auth.success ? 'led-green' : 'led-red');
+        const statusText = !auth.tested ? 'not tested' : (auth.success ? 'verified' : 'failed');
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        let authHtml = '';
+        if (b.authType === 'api-key') {
+            authHtml = `
+                <div class="form-group" style="margin-top:8px;margin-bottom:8px;">
+                    <input class="form-input" id="gemini-key" placeholder="AIza..." value="${state.geminiKey}">
+                </div>
+            `;
+        }
+        if (b.authType === 'device-auth') {
+            authHtml = `<div class="card-desc" style="margin-top:8px;">${b.authInstructions}</div>`;
+        }
+        card.innerHTML = `
+            <div class="card-header">
+                <div class="led ${ledClass}"></div>
+                <div class="card-title">${b.displayName}</div>
+                <div style="margin-left:auto; font-size:0.75rem; color:var(--text-muted)">${statusText}</div>
+            </div>
+            <div class="card-desc">${b.authInstructions}</div>
+            ${authHtml}
+            <div style="display:flex;gap:8px;margin-top:8px;">
+                <button class="btn btn-sm" onclick="testBackend('${name}')">Test</button>
+                ${b.authType === 'device-auth' ? `<button class="btn btn-sm" onclick="authBackend('${name}')">Login</button>` : ''}
+                ${b.authType === 'api-key' ? `<button class="btn btn-sm" onclick="saveApiKey('${name}')">Save Key</button>` : ''}
+            </div>
+        `;
+        list.appendChild(card);
+    }
+}
+
+async function testBackend(name) {
+    currentLogEl = document.getElementById('authLog');
+    currentLogEl.textContent = '';
+    appendLog(`Testing ${name}...\n`);
+    try {
+        const res = await fetch(`/api/setup/backends/${name}/test`, { method: 'POST' });
+        const data = await res.json();
+        state.backendAuth[name] = { tested: true, success: data.success };
+        appendLog(data.success ? `OK: ${data.output}\n` : `Failed: ${data.error}\n`);
+        renderAuthStep();
+    } catch (e) {
+        appendLog(`Error: ${e.message}\n`);
+    }
+}
+
+async function authBackend(name) {
+    currentLogEl = document.getElementById('authLog');
+    currentLogEl.textContent = '';
+    appendLog(`Starting ${name} auth...\n`);
+    try {
+        const res = await fetch(`/api/setup/backends/${name}/auth`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            state.backendAuth[name] = { tested: true, success: true };
+            appendLog('Auth successful!\n');
+        } else {
+            appendLog(`Auth failed: ${data.error || 'unknown'}\n`);
+        }
+        renderAuthStep();
+    } catch (e) {
+        appendLog(`Error: ${e.message}\n`);
+    }
+}
+
+async function saveApiKey(name) {
+    const input = document.getElementById('gemini-key');
+    const key = input ? input.value.trim() : '';
+    if (!key) return;
+    state.geminiKey = key;
+    currentLogEl = document.getElementById('authLog');
+    currentLogEl.textContent = '';
+    try {
+        const res = await fetch(`/api/setup/backends/${name}/auth`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey: key }),
+        });
+        const data = await res.json();
+        state.backendAuth[name] = { tested: true, success: data.success };
+        appendLog(data.success ? 'API key saved and validated.\n' : `Failed: ${data.error}\n`);
+        renderAuthStep();
+    } catch (e) {
+        appendLog(`Error: ${e.message}\n`);
+    }
+}
+
+// ── Step 4: Channels ──
+const ADAPTER_META = {
+    telegram: { icon: '&#x2708;', label: 'Telegram' },
+    whatsapp: { icon: '&#x1F4AC;', label: 'WhatsApp' },
+    slack: { icon: '&#x1F4BB;', label: 'Slack' },
+};
+
+function renderAdapters() {
+    const list = document.getElementById('adapterList');
+    list.innerHTML = '';
+
+    fetch('/api/setup/adapters').then(r => r.json()).then(adapterInfos => {
+        adapterInfos.forEach(adapter => {
+            const meta = ADAPTER_META[adapter.name] || { icon: '', label: adapter.displayName };
+            const enabled = state.adapters[adapter.name]?.enabled || false;
+            const config = state.adapters[adapter.name]?.config || {};
+
+            const wrapper = document.createElement('div');
+            wrapper.style.marginBottom = '12px';
+
+            // Toggle row
+            const row = document.createElement('div');
+            row.className = 'toggle-row';
+            row.innerHTML = `
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:1.2rem;">${meta.icon}</span>
+                    <span class="toggle-label">${meta.label}</span>
+                </div>
+                <div class="toggle ${enabled ? 'on' : ''}" data-adapter="${adapter.name}"></div>
+            `;
+            row.querySelector('.toggle').onclick = function() {
+                this.classList.toggle('on');
+                const on = this.classList.contains('on');
+                if (!state.adapters[adapter.name]) state.adapters[adapter.name] = { enabled: false, config: {} };
+                state.adapters[adapter.name].enabled = on;
+                wrapper.querySelector('.adapter-config').classList.toggle('visible', on);
+                updateChannelNext();
+            };
+            wrapper.appendChild(row);
+
+            // Config panel
+            const panel = document.createElement('div');
+            panel.className = 'adapter-config' + (enabled ? ' visible' : '');
+
+            const instructions = document.createElement('div');
+            instructions.className = 'adapter-instructions';
+            instructions.textContent = adapter.instructions;
+            panel.appendChild(instructions);
+
+            adapter.envVars.forEach(v => {
+                if (v.key === 'WA_ENABLED') return; // skip toggle duplicate
+                const group = document.createElement('div');
+                group.className = 'form-group';
+                group.innerHTML = `
+                    <label class="form-label">${v.label}</label>
+                    <input class="form-input" data-adapter="${adapter.name}" data-key="${v.key}"
+                        placeholder="${v.placeholder || ''}" value="${config[v.key] || v.default || ''}"
+                        type="${v.secret ? 'password' : 'text'}">
+                    ${v.description ? `<div class="form-hint">${v.description}</div>` : ''}
+                `;
+                group.querySelector('input').oninput = function() {
+                    if (!state.adapters[adapter.name]) state.adapters[adapter.name] = { enabled: false, config: {} };
+                    state.adapters[adapter.name].config[v.key] = this.value;
+                };
+                panel.appendChild(group);
+            });
+
+            // Test button
+            if (adapter.name !== 'whatsapp') {
+                const testBtn = document.createElement('button');
+                testBtn.className = 'btn btn-sm';
+                testBtn.textContent = 'Test Connection';
+                testBtn.onclick = async () => {
+                    testBtn.disabled = true;
+                    testBtn.textContent = 'Testing...';
+                    const cfg = state.adapters[adapter.name]?.config || {};
+                    try {
+                        const res = await fetch(`/api/setup/adapters/${adapter.name}/test`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(cfg),
+                        });
+                        const data = await res.json();
+                        testBtn.textContent = data.success ? `Connected: ${data.message}` : `Failed: ${data.error}`;
+                        testBtn.style.color = data.success ? 'var(--phosphor)' : 'var(--red)';
+                    } catch (e) {
+                        testBtn.textContent = 'Error: ' + e.message;
+                    }
+                    setTimeout(() => {
+                        testBtn.disabled = false;
+                        testBtn.textContent = 'Test Connection';
+                        testBtn.style.color = '';
+                    }, 5000);
+                };
+                panel.appendChild(testBtn);
+            }
+
+            wrapper.appendChild(panel);
+            list.appendChild(wrapper);
+        });
+        updateChannelNext();
+    });
+}
+
+function updateChannelNext() {
+    const anyEnabled = Object.values(state.adapters).some(a => a.enabled);
+    document.getElementById('channelNext').disabled = !anyEnabled;
+}
+
+// ── Step 5: Advanced ──
+function renderAdvanced() {
+    const select = document.getElementById('defaultBackend');
+    select.innerHTML = '';
+    for (const name of state.selectedBackends) {
+        const b = state.backends.find(x => x.name === name);
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = b ? b.displayName : name;
+        select.appendChild(opt);
+    }
+}
+
+// ── Step 6: Review ──
+function renderReview() {
+    const content = document.getElementById('reviewContent');
+    const selectedBackendNames = [...state.selectedBackends].map(n => {
+        const b = state.backends.find(x => x.name === n);
+        return b ? b.displayName : n;
+    });
+
+    const enabledAdapters = Object.entries(state.adapters)
+        .filter(([, v]) => v.enabled)
+        .map(([k]) => ADAPTER_META[k]?.label || k);
+
+    const defaultBe = document.getElementById('defaultBackend')?.value || [...state.selectedBackends][0];
+    const port = document.getElementById('uiPort')?.value || '3333';
+    const timeout = document.getElementById('agentTimeout')?.value || '600000';
+    const fallback = document.getElementById('fallbackToggle')?.classList.contains('on');
+
+    content.innerHTML = `
+        <div class="step-title">Review Configuration</div>
+        <div class="step-desc">Verify your settings before saving.</div>
+        <div class="review-section">
+            <div class="review-title">Backends</div>
+            <div class="review-items">
+                <div class="review-item"><span>Selected</span><span class="review-value">${selectedBackendNames.join(', ')}</span></div>
+                <div class="review-item"><span>Default</span><span class="review-value">${defaultBe}</span></div>
+            </div>
+        </div>
+        <div class="review-section">
+            <div class="review-title">Channels</div>
+            <div class="review-items">
+                <div class="review-item"><span>Enabled</span><span class="review-value">${enabledAdapters.join(', ') || 'None'}</span></div>
+            </div>
+        </div>
+        <div class="review-section">
+            <div class="review-title">Settings</div>
+            <div class="review-items">
+                <div class="review-item"><span>UI Port</span><span class="review-value">${port}</span></div>
+                <div class="review-item"><span>Timeout</span><span class="review-value">${timeout}ms</span></div>
+                <div class="review-item"><span>Fallback</span><span class="review-value">${fallback ? 'Enabled' : 'Disabled'}</span></div>
+            </div>
+        </div>
+    `;
+}
+
+async function saveAndLaunch() {
+    const defaultBe = document.getElementById('defaultBackend')?.value || [...state.selectedBackends][0];
+    const port = document.getElementById('uiPort')?.value || '3333';
+    const timeout = document.getElementById('agentTimeout')?.value || '600000';
+    const fallback = document.getElementById('fallbackToggle')?.classList.contains('on');
+
+    const env = {
+        DEFAULT_BACKEND: defaultBe,
+        ENABLED_BACKENDS: [...state.selectedBackends].join(','),
+        UI_PORT: port,
+        AGENT_TIMEOUT: timeout,
+        FALLBACK_ENABLED: fallback ? 'true' : 'false',
+        FALLBACK_BACKEND_PRIORITY: [...state.selectedBackends].join(','),
+    };
+
+    // Gemini key
+    if (state.geminiKey) {
+        env.GEMINI_API_KEY = state.geminiKey;
+    }
+
+    // WhatsApp
+    const waConf = state.adapters.whatsapp;
+    if (waConf?.enabled) {
+        env.WA_ENABLED = 'true';
+        Object.assign(env, waConf.config);
+    } else {
+        env.WA_ENABLED = 'false';
+    }
+
+    // Telegram
+    const tgConf = state.adapters.telegram;
+    if (tgConf?.enabled) {
+        Object.assign(env, tgConf.config);
+    }
+
+    // Slack
+    const slConf = state.adapters.slack;
+    if (slConf?.enabled) {
+        Object.assign(env, slConf.config);
+    }
+
+    try {
+        const res = await fetch('/api/setup/env', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(env),
+        });
+        const data = await res.json();
+
+        document.getElementById('reviewNav').style.display = 'none';
+        document.getElementById('reviewContent').innerHTML = '';
+
+        const launch = document.getElementById('launchArea');
+        launch.style.display = 'block';
+        launch.innerHTML = `
+            <div class="success-banner">
+                <div class="success-icon">&#x1F43E;</div>
+                <div class="success-text">Configuration saved!</div>
+                <div class="success-sub">.env file written successfully</div>
+                <div class="code-block">yarn start</div>
+                <div style="color:var(--text-muted);font-size:0.8rem;margin-bottom:20px;">
+                    Run this command to start the bark-pack server.
+                </div>
+                <button class="btn btn-primary" onclick="launchServer()" style="padding:10px 24px;">
+                    Launch Server Now
+                </button>
+            </div>
+        `;
+    } catch (e) {
+        alert('Failed to save: ' + e.message);
+    }
+}
+
+async function launchServer() {
+    try {
+        await fetch('/api/setup/launch', { method: 'POST' });
+        document.getElementById('launchArea').innerHTML = `
+            <div class="success-banner">
+                <div class="success-icon">&#x1F680;</div>
+                <div class="success-text">Server starting...</div>
+                <div class="success-sub">The setup wizard will close. Your dashboard will be at:</div>
+                <div class="code-block">http://localhost:${document.getElementById('uiPort')?.value || '3333'}</div>
+            </div>
+        `;
+    } catch {}
+}
+
+// ── Init ──
+renderProgress();
+</script>
+</body>
+</html>
