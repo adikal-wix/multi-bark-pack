@@ -33,8 +33,8 @@ module.exports = function createCodexBackend(config = {}) {
         },
 
         // --- Models ---
-        models: ['gpt-5.3-codex', 'o3', 'o4-mini', 'gpt-5.2-codex'],
-        defaultModel: 'gpt-5.3-codex',
+        models: ['default', 'o3', 'o4-mini'],
+        defaultModel: 'default',
 
         validateModel(model) {
             // Codex has many models, be permissive
@@ -63,7 +63,7 @@ module.exports = function createCodexBackend(config = {}) {
                 tmpDir,
             } = opts;
 
-            const modelFlag = model ? `-m ${model}` : '';
+            const modelFlag = model && model !== 'default' ? `-m ${model}` : '';
 
             // Build the shell script
             // Codex doesn't support system prompts via CLI, prepend to prompt if needed
