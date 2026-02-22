@@ -69,6 +69,10 @@ module.exports = function createGeminiBackend(config = {}) {
             // Build the shell script
             // Gemini doesn't support system prompts via CLI, prepend to prompt if needed
             let script = '#!/bin/bash\n';
+            // Pass through GEMINI_API_KEY if set in server environment
+            if (process.env.GEMINI_API_KEY) {
+                script += `export GEMINI_API_KEY="${process.env.GEMINI_API_KEY}"\n`;
+            }
 
             if (isResume && sessionId) {
                 // Resume existing session by UUID

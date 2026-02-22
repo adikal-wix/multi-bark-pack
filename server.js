@@ -1447,10 +1447,11 @@ async function runDaily(adapter) {
 
             const scriptFile = path.join(TMP_DIR, `${agent.id}.standup.sh`);
             let resolved = false;
+            let poll = null;
             function done(msg) {
                 if (resolved) return;
                 resolved = true;
-                clearInterval(poll);
+                if (poll) clearInterval(poll);
                 clearTimeout(hardDeadline);
                 for (const f of [promptFile, outFile, doneFile, progressFile, scriptFile]) {
                     try { unlinkSync(f); } catch {}
@@ -1507,7 +1508,7 @@ async function runDaily(adapter) {
             }
 
             // Poll every second for completion
-            const poll = setInterval(() => {
+            poll = setInterval(() => {
                 if (existsSync(doneFile)) {
                     let output = '';
                     try { output = readFileSync(outFile, 'utf8').trim(); } catch {}
