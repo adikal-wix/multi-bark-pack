@@ -1,107 +1,74 @@
 #!/bin/bash
 # gather-cursor.sh — Run this on the Mac where Cursor CLI works
-# It collects all Cursor auth/config files into a tarball you can transfer
+# Collects ONLY auth tokens and small config files (<1MB each)
 set -euo pipefail
 
-OUT_DIR="/tmp/cursor-export"
-TARBALL="/tmp/cursor-export.tar.gz"
+TARBALL="/tmp/cursor-auth.tar.gz"
+OUT_DIR="/tmp/cursor-auth-export"
 
-echo "🔍 Gathering Cursor CLI config and auth data..."
+echo "🔍 Gathering Cursor auth data (lightweight only)..."
 echo ""
 
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
-# 1. Cursor CLI config & auth
+# 1. ~/.cursor/ — only small config files, skip projects/extensions/ai-tracking
 if [ -d "$HOME/.cursor" ]; then
-    echo "✓ ~/.cursor/"
     mkdir -p "$OUT_DIR/dot-cursor"
-    cp -R "$HOME/.cursor/" "$OUT_DIR/dot-cursor/" 2>/dev/null || true
+    find "$HOME/.cursor" -maxdepth 1 -type f -size -1M -exec cp {} "$OUT_DIR/dot-cursor/" \; 2>/dev/null
+    echo "✓ ~/.cursor/ config files"
 fi
 
-# 2. Cursor App Support (auth tokens, settings, state)
+# 2. ~/.cursor-agent/ — agent CLI specific auth/config
+if [ -d "$HOME/.cursor-agent" ]; then
+    mkdir -p "$OUT_DIR/dot-cursor-agent"
+    cp -R "$HOME/.cursor-agent/" "$OUT_DIR/dot-cursor-agent/" 2>/dev/null || true
+    echo "✓ ~/.cursor-agent/"
+fi
+
+# 3. App Support — only auth-related files, no databases or caches
 APP_SUPPORT="$HOME/Library/Application Support/Cursor"
 if [ -d "$APP_SUPPORT" ]; then
-    echo "✓ ~/Library/Application Support/Cursor/"
     mkdir -p "$OUT_DIR/app-support"
-    # Auth-related files
-    for f in "storage.json" "user-data" "AuthToken" "token" "cookies"; do
-        if [ -e "$APP_SUPPORT/$f" ]; then
-            cp -R "$APP_SUPPORT/$f" "$OUT_DIR/app-support/" 2>/dev/null || true
-            echo "  → $f"
-        fi
+    # Auth tokens and small config
+    for f in storage.json AuthToken token cookies machineid; do
+        [ -f "$APP_SUPPORT/$f" ] && cp "$APP_SUPPORT/$f" "$OUT_DIR/app-support/" && echo "  → $f"
     done
-    # User settings
+    # User settings (json only)
     if [ -d "$APP_SUPPORT/User" ]; then
         mkdir -p "$OUT_DIR/app-support/User"
-        for f in "settings.json" "keybindings.json" "globalStorage" "state"; do
-            if [ -e "$APP_SUPPORT/User/$f" ]; then
-                cp -R "$APP_SUPPORT/User/$f" "$OUT_DIR/app-support/User/" 2>/dev/null || true
-                echo "  → User/$f"
-            fi
+        for f in settings.json keybindings.json; do
+            [ -f "$APP_SUPPORT/User/$f" ] && cp "$APP_SUPPORT/User/$f" "$OUT_DIR/app-support/User/" && echo "  → User/$f"
         done
     fi
 fi
 
-# 3. Cursor Agent CLI specific config
-AGENT_CONFIG="$HOME/.cursor-agent"
-if [ -d "$AGENT_CONFIG" ]; then
-    echo "✓ ~/.cursor-agent/"
-    mkdir -p "$OUT_DIR/dot-cursor-agent"
-    cp -R "$AGENT_CONFIG/" "$OUT_DIR/dot-cursor-agent/" 2>/dev/null || true
-fi
-
-# 4. Cursor compile cache (might contain auth state)
-CACHE_DIR="$HOME/Library/Caches/cursor-compile-cache"
-if [ -d "$CACHE_DIR" ]; then
-    echo "✓ Compile cache exists (skipping — will rebuild)"
-fi
-
-# 5. Keychain tokens (export as text, can't copy keychain items directly)
+# 4. Keychain tokens
 echo ""
-echo "🔑 Checking Keychain for Cursor tokens..."
+echo "🔑 Keychain..."
 mkdir -p "$OUT_DIR/keychain"
-for label in "cursor" "Cursor" "cursor-agent" "cursor.com"; do
-    security find-generic-password -l "$label" -g 2>"$OUT_DIR/keychain/${label}.txt" 2>/dev/null && echo "  → Found keychain entry: $label" || true
-    security find-internet-password -l "$label" -g 2>>"$OUT_DIR/keychain/${label}.txt" 2>/dev/null || true
+for svc in cursor Cursor cursor-agent cursor.com cursor-auth api.cursor.com; do
+    security find-generic-password -s "$svc" -g 2>"$OUT_DIR/keychain/$svc.txt" 2>/dev/null && echo "  → $svc" || true
 done
-# Also search by service
-for svc in "cursor-auth" "cursor.com" "api.cursor.com" "cursor-agent"; do
-    security find-generic-password -s "$svc" -g 2>"$OUT_DIR/keychain/svc-${svc}.txt" 2>/dev/null && echo "  → Found keychain service: $svc" || true
-done
+# Remove empty files
+find "$OUT_DIR/keychain" -empty -delete 2>/dev/null
 
-# 6. Environment variables
-echo ""
-echo "🌍 Checking environment..."
-mkdir -p "$OUT_DIR/env"
-env | grep -iE 'cursor|CURSOR' > "$OUT_DIR/env/cursor-env.txt" 2>/dev/null || echo "(no CURSOR env vars)"
-
-# 7. Cursor CLI binary info
-echo ""
-echo "📦 CLI binary info..."
-mkdir -p "$OUT_DIR/binary-info"
-which cursor-agent > "$OUT_DIR/binary-info/which.txt" 2>/dev/null || true
-which agent >> "$OUT_DIR/binary-info/which.txt" 2>/dev/null || true
-cursor-agent --version > "$OUT_DIR/binary-info/version.txt" 2>/dev/null || true
-brew info cursor-cli > "$OUT_DIR/binary-info/brew-info.txt" 2>/dev/null || true
-
-# 8. Node version used
-echo "Node version (system): $(node --version 2>/dev/null || echo 'not found')" > "$OUT_DIR/binary-info/node-info.txt"
-CURSOR_NODE="$(dirname "$(realpath "$(which cursor-agent)" 2>/dev/null || echo /dev/null)")/node"
-if [ -x "$CURSOR_NODE" ]; then
-    echo "Node version (bundled): $("$CURSOR_NODE" --version)" >> "$OUT_DIR/binary-info/node-info.txt"
-fi
+# 5. Binary version info
+mkdir -p "$OUT_DIR/info"
+cursor-agent --version > "$OUT_DIR/info/version.txt" 2>/dev/null || echo "unknown" > "$OUT_DIR/info/version.txt"
+uname -a > "$OUT_DIR/info/uname.txt" 2>/dev/null
+CURSOR_NODE="$(dirname "$(realpath "$(which cursor-agent 2>/dev/null || echo /dev/null)" 2>/dev/null || echo /dev/null)")/node"
+[ -x "$CURSOR_NODE" ] && "$CURSOR_NODE" --version > "$OUT_DIR/info/node-version.txt" 2>/dev/null
 
 # Create tarball
 echo ""
 echo "📦 Creating tarball..."
-tar -czf "$TARBALL" -C /tmp cursor-export
+tar -czf "$TARBALL" -C /tmp cursor-auth-export
+rm -rf "$OUT_DIR"
 
+SIZE="$(du -h "$TARBALL" | cut -f1)"
 echo ""
-echo "✅ Done! Transfer this file to your other Mac:"
+echo "✅ Done! $TARBALL ($SIZE)"
 echo ""
-echo "   $TARBALL ($(du -h "$TARBALL" | cut -f1))"
-echo ""
-echo "   scp $TARBALL youruser@other-mac:/tmp/"
-echo ""
-echo "Then run the restore script on the other Mac."
+echo "Transfer:  scp $TARBALL user@other-mac:/tmp/"
+echo "Restore:   ./tools/restore-cursor.sh /tmp/cursor-auth.tar.gz"
