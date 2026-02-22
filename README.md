@@ -133,10 +133,33 @@ The default whisper model path is `/opt/homebrew/share/whisper-cpp/models/ggml-b
 git clone <repo-url>
 cd bark-pack
 yarn install
+```
+
+### Option 1: Setup Wizard (recommended)
+
+The setup wizard walks you through backend installation, authentication, and channel configuration — all from your browser.
+
+```bash
+yarn setup
+```
+
+Open **http://localhost:3334** and follow the 7-step wizard:
+
+1. **Welcome** — overview
+2. **Prerequisites** — auto-detects Node, tmux, ffmpeg, whisper; install missing with one click
+3. **Backend Selection** — pick and install LLM backends (Claude Code, Cursor, Codex, Gemini)
+4. **Backend Auth** — verify each backend works; device auth for Codex, API key for Gemini
+5. **Channels** — configure Telegram, WhatsApp, or Slack with test buttons
+6. **Advanced** — default backend, timeout, fallback settings
+7. **Review & Launch** — saves your `.env` and starts the server
+
+### Option 2: Manual setup
+
+```bash
 cp .env.example .env
 ```
 
-Now edit `.env` with your platform credentials (follow **one** of the platform guides below), then:
+Edit `.env` with your platform credentials (follow **one** of the platform guides below), then:
 
 ```bash
 yarn start
@@ -656,8 +679,15 @@ multi-bark-pack/
     index.js          Skills manager (loads at startup)
     parser.js         SKILL.md parser
   .claude/skills/     Skill definitions (SKILL.md files)
-  ui/                 Admin web dashboard
-    index.html        Dashboard UI
+  setup-server.js     Setup wizard server (yarn setup)
+  setup/              Setup wizard modules
+    checks.js         Prerequisite detection & install
+    backends.js       Backend install/version/auth/test
+    adapters.js       Adapter connection testing
+    env-writer.js     .env file reader/writer
+  ui/                 Web interfaces
+    index.html        Admin dashboard
+    setup.html        Setup wizard UI
   packs.json          Name pack definitions
   projects/           Where pups clone repos (auto-created, gitignored)
   .bark-tmp/          Runtime state files (auto-created, gitignored)
