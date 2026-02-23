@@ -2393,7 +2393,7 @@
             const installed = backends.filter(b => b.installed && b.version);
             container.innerHTML = `<button class="filter-chip ${!filterBackend ? 'active' : ''}" data-backend="all">All</button>` +
                 installed.map(b =>
-                    `<button class="filter-chip ${filterBackend === b.id ? 'active' : ''}" data-backend="${b.id}">${b.displayName}</button>`
+                    `<button class="filter-chip ${filterBackend === b.name ? 'active' : ''}" data-backend="${b.name}">${b.displayName}</button>`
                 ).join('');
             container.querySelectorAll('.filter-chip').forEach(chip => {
                 chip.addEventListener('click', () => {
