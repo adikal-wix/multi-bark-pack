@@ -329,6 +329,87 @@
         }
 
         /* ═══════════════════════════════════════════════════════════════
+           FILTER BAR
+           ═══════════════════════════════════════════════════════════════ */
+        .filter-bar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .filter-chips {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .filter-chip {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            padding: 4px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .filter-chip:hover {
+            border-color: var(--text-muted);
+            color: var(--text);
+        }
+
+        .filter-chip.active {
+            color: var(--text);
+            border-color: var(--cyan);
+            background: rgba(0, 212, 255, 0.08);
+        }
+
+        .filter-chip.active[data-status="idle"] {
+            border-color: var(--phosphor);
+            background: rgba(0, 255, 65, 0.08);
+        }
+
+        .filter-chip.active[data-status="working"] {
+            border-color: var(--cyan);
+            background: rgba(0, 212, 255, 0.08);
+        }
+
+        .filter-chip.active[data-status="error"] {
+            border-color: var(--red);
+            background: rgba(255, 51, 102, 0.08);
+        }
+
+        .filter-chip.active[data-status="stopped"] {
+            border-color: var(--amber);
+            background: rgba(255, 176, 0, 0.08);
+        }
+
+        .filter-divider {
+            width: 1px;
+            height: 20px;
+            background: var(--border);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
            SECTION HEADER
            ═══════════════════════════════════════════════════════════════ */
         .section-header {
@@ -1806,6 +1887,27 @@
         <!-- Pups Panel -->
         <div class="tab-panel active" id="panel-pups">
 
+        <!-- Filter Bar -->
+        <div class="filter-bar" id="filter-bar">
+            <div class="filter-group">
+                <span class="filter-label">Status</span>
+                <div class="filter-chips" id="status-filters">
+                    <button class="filter-chip active" data-status="all">All</button>
+                    <button class="filter-chip" data-status="idle">Idle</button>
+                    <button class="filter-chip" data-status="working">Processing</button>
+                    <button class="filter-chip" data-status="error">Error</button>
+                    <button class="filter-chip" data-status="stopped">Stopped</button>
+                </div>
+            </div>
+            <div class="filter-divider"></div>
+            <div class="filter-group">
+                <span class="filter-label">Backend</span>
+                <div class="filter-chips" id="backend-filters">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+
         <!-- Active Agents Section -->
         <div class="section-header">
             <span class="section-title">Active Pups</span>
@@ -2035,6 +2137,8 @@
         let ws = null;
         let packsData = { activePack: '', packs: {} };
         let selectedPackId = null;
+        let filterStatus = null;   // null = all
+        let filterBackend = null;  // null = all
 
         // ═══════════════════════════════════════════════════════════════
         // DOM ELEMENTS
@@ -2281,24 +2385,62 @@
                     ${b.version ? `<span class="backend-version">v${b.version}</span>` : ''}
                 </div>
             `).join('');
+            renderBackendFilters();
         }
+
+        function renderBackendFilters() {
+            const container = document.getElementById('backend-filters');
+            const installed = backends.filter(b => b.installed && b.version);
+            container.innerHTML = `<button class="filter-chip ${!filterBackend ? 'active' : ''}" data-backend="all">All</button>` +
+                installed.map(b =>
+                    `<button class="filter-chip ${filterBackend === b.id ? 'active' : ''}" data-backend="${b.id}">${b.displayName}</button>`
+                ).join('');
+            container.querySelectorAll('.filter-chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    filterBackend = chip.dataset.backend === 'all' ? null : chip.dataset.backend;
+                    container.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+                    chip.classList.add('active');
+                    renderAgents();
+                });
+            });
+        }
+
+        // Status filter click handlers
+        document.getElementById('status-filters').querySelectorAll('.filter-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                filterStatus = chip.dataset.status === 'all' ? null : chip.dataset.status;
+                document.getElementById('status-filters').querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+                renderAgents();
+            });
+        });
 
         function renderAgents() {
             const active = agents.filter(a => a.status !== 'deleted');
             const shelved = agents.filter(a => a.status === 'deleted');
 
-            activeCount.textContent = active.length;
+            // Apply filters
+            let filtered = active;
+            if (filterStatus) {
+                filtered = filtered.filter(a => getStatusClass(a) === filterStatus);
+            }
+            if (filterBackend) {
+                filtered = filtered.filter(a => a.backend === filterBackend);
+            }
 
-            if (active.length === 0) {
+            activeCount.textContent = filtered.length + (filtered.length !== active.length ? '/' + active.length : '');
+
+            if (filtered.length === 0) {
+                const hasFilters = filterStatus || filterBackend;
                 agentsGrid.innerHTML = `
                     <div class="empty-state">
-                        <div class="empty-icon">🐕</div>
-                        <div class="empty-text">No active pups</div>
-                        <div class="empty-hint">Send a message to spawn a new pup</div>
+                        <div class="empty-icon">${hasFilters ? '🔍' : '🐕'}</div>
+                        <div class="empty-text">${hasFilters ? 'No pups match filters' : 'No active pups'}</div>
+                        <div class="empty-hint">${hasFilters ? 'Try changing or clearing your filters' : 'Send a message to spawn a new pup'}</div>
                     </div>
                 `;
             } else {
-                agentsGrid.innerHTML = active.map(agent => renderAgentCard(agent)).join('');
+                agentsGrid.innerHTML = filtered.map(agent => renderAgentCard(agent)).join('');
             }
 
             if (shelved.length > 0) {
