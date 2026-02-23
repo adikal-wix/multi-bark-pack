@@ -2247,7 +2247,7 @@
         function renderBackends() {
             backendsList.innerHTML = backends.map(b => `
                 <div class="backend-item">
-                    <span class="backend-led ${b.installed ? 'online' : 'offline'}"></span>
+                    <span class="backend-led ${(b.installed && b.version) ? 'online' : 'offline'}"></span>
                     <span class="backend-name">${b.displayName}</span>
                     ${b.version ? `<span class="backend-version">v${b.version}</span>` : ''}
                 </div>
