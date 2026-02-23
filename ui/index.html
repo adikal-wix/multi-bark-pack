@@ -1478,6 +1478,125 @@
             box-shadow: none;
         }
 
+        .chat-attach-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            background: var(--bg-panel);
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-attach-btn:hover {
+            border-color: var(--phosphor-dim);
+            color: var(--phosphor);
+        }
+
+        .chat-file-preview {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            background: var(--bg-card);
+        }
+
+        .chat-file-preview:empty {
+            display: none;
+        }
+
+        .chat-file-preview-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 0.8rem;
+        }
+
+        .chat-file-preview-item img {
+            width: 32px;
+            height: 32px;
+            object-fit: cover;
+            border-radius: 2px;
+        }
+
+        .chat-file-preview-item .file-icon {
+            font-size: 1.2rem;
+        }
+
+        .chat-file-preview-item .file-name {
+            color: var(--text);
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .chat-file-preview-item .file-remove {
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-left: 4px;
+        }
+
+        .chat-file-preview-item .file-remove:hover {
+            color: var(--red);
+        }
+
+        .chat-input-area.drag-over {
+            outline: 2px dashed var(--phosphor);
+            outline-offset: -2px;
+            background: var(--phosphor-glow);
+        }
+
+        .chat-message-attachments {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .chat-message-attachment {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            background: var(--bg-deep);
+            border-radius: var(--radius);
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+
+        .chat-message-attachment img {
+            max-width: 200px;
+            max-height: 150px;
+            border-radius: var(--radius);
+            cursor: pointer;
+        }
+
+        .chat-message-attachment img:hover {
+            opacity: 0.9;
+        }
+
+        .chat-message-attachment a {
+            color: var(--cyan);
+            text-decoration: none;
+        }
+
+        .chat-message-attachment a:hover {
+            text-decoration: underline;
+        }
+
         .chat-input-hint {
             font-size: 0.7rem;
             color: var(--text-muted);
@@ -1743,8 +1862,11 @@
                             <!-- Messages populated by JS -->
                         </div>
 
-                        <div class="chat-input-area">
+                        <div class="chat-input-area" id="chat-input-area">
+                            <div class="chat-file-preview" id="chat-file-preview"></div>
                             <div class="chat-input-wrapper">
+                                <button class="chat-attach-btn" id="chat-attach-btn" title="Attach file">📎</button>
+                                <input type="file" id="chat-file-input" style="display: none;" accept="image/*,.pdf,.txt,.md,.json,.js,.ts,.py,.sh,.css,.html" multiple>
                                 <textarea class="chat-input" id="chat-input" placeholder="Type a message..." rows="1"></textarea>
                                 <button class="chat-send-btn" id="chat-send-btn">➤</button>
                             </div>
@@ -2520,9 +2642,140 @@
         const chatMessagesEl = document.getElementById('chat-messages');
         const chatInput = document.getElementById('chat-input');
         const chatSendBtn = document.getElementById('chat-send-btn');
+        const chatAttachBtn = document.getElementById('chat-attach-btn');
+        const chatFileInput = document.getElementById('chat-file-input');
+        const chatFilePreview = document.getElementById('chat-file-preview');
+        const chatInputArea = document.getElementById('chat-input-area');
         const newChatDialog = document.getElementById('new-chat-dialog');
         const newChatName = document.getElementById('new-chat-name');
         const newChatMessage = document.getElementById('new-chat-message');
+
+        // File upload state
+        let pendingFiles = [];
+
+        // File upload event listeners
+        chatAttachBtn.addEventListener('click', () => chatFileInput.click());
+
+        chatFileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+            chatFileInput.value = ''; // Reset for same file selection
+        });
+
+        // Drag and drop
+        chatInputArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            chatInputArea.classList.add('drag-over');
+        });
+
+        chatInputArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            chatInputArea.classList.remove('drag-over');
+        });
+
+        chatInputArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            chatInputArea.classList.remove('drag-over');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        function handleFiles(fileList) {
+            const maxSize = 10 * 1024 * 1024; // 10MB limit
+            const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.txt', '.md', '.json', '.js', '.ts', '.py', '.sh', '.css', '.html'];
+
+            for (const file of fileList) {
+                if (file.size > maxSize) {
+                    alert(`File "${file.name}" is too large (max 10MB)`);
+                    continue;
+                }
+
+                const ext = '.' + file.name.split('.').pop().toLowerCase();
+                const isImage = file.type.startsWith('image/');
+                const isAllowed = isImage || allowedExts.includes(ext);
+
+                if (!isAllowed) {
+                    alert(`File type not supported: ${file.name}`);
+                    continue;
+                }
+
+                pendingFiles.push(file);
+            }
+
+            renderFilePreview();
+        }
+
+        function renderFilePreview() {
+            if (pendingFiles.length === 0) {
+                chatFilePreview.innerHTML = '';
+                return;
+            }
+
+            chatFilePreview.innerHTML = pendingFiles.map((file, i) => {
+                const isImage = file.type.startsWith('image/');
+                const icon = isImage ? '' : getFileIcon(file.name);
+                const preview = isImage
+                    ? `<img src="${URL.createObjectURL(file)}" alt="${escapeHtml(file.name)}">`
+                    : `<span class="file-icon">${icon}</span>`;
+
+                return `
+                    <div class="chat-file-preview-item" data-index="${i}">
+                        ${preview}
+                        <span class="file-name">${escapeHtml(file.name)}</span>
+                        <span class="file-remove" onclick="removeFile(${i})">x</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Global function for onclick handler
+        window.removeFile = function(index) {
+            pendingFiles.splice(index, 1);
+            renderFilePreview();
+        };
+
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const icons = {
+                pdf: '📄', txt: '📝', md: '📝', json: '📋',
+                js: '📜', ts: '📜', py: '🐍', sh: '💻',
+                css: '🎨', html: '🌐'
+            };
+            return icons[ext] || '📎';
+        }
+
+        function clearPendingFiles() {
+            pendingFiles = [];
+            renderFilePreview();
+        }
+
+        async function uploadFiles(files) {
+            const fileData = [];
+
+            for (const file of files) {
+                const base64 = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.readAsDataURL(file);
+                });
+
+                fileData.push({
+                    name: file.name,
+                    type: file.type,
+                    data: base64
+                });
+            }
+
+            const res = await fetch(`${API_BASE}/upload`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: fileData })
+            });
+
+            if (!res.ok) {
+                throw new Error('Upload failed');
+            }
+
+            return res.json();
+        }
 
         function renderChatList() {
             const activeAgents = agents.filter(a => a.status !== 'deleted');
@@ -2632,11 +2885,34 @@
                 const isOutgoing = msg.role === 'user';
                 const isStreaming = msg.streaming;
 
+                // Render attachments
+                let attachmentsHtml = '';
+                if (msg.attachments && msg.attachments.length > 0) {
+                    attachmentsHtml = `
+                        <div class="chat-message-attachments">
+                            ${msg.attachments.map(att => {
+                                const isImage = att.type?.startsWith('image/');
+                                if (isImage) {
+                                    return `<div class="chat-message-attachment">
+                                        <img src="${API_BASE}/files/${encodeURIComponent(att.filename)}" alt="${escapeHtml(att.filename)}" onclick="window.open(this.src, '_blank')">
+                                    </div>`;
+                                } else {
+                                    return `<div class="chat-message-attachment">
+                                        <span>${getFileIcon(att.filename)}</span>
+                                        <a href="${API_BASE}/files/${encodeURIComponent(att.filename)}" target="_blank">${escapeHtml(att.filename)}</a>
+                                    </div>`;
+                                }
+                            }).join('')}
+                        </div>
+                    `;
+                }
+
                 return `
                     <div class="chat-message ${isOutgoing ? 'outgoing' : ''} ${isStreaming ? 'streaming' : ''}">
                         <div class="chat-message-avatar">${isOutgoing ? '👤' : getPackIcon(agent)}</div>
                         <div class="chat-message-bubble">
                             <div class="chat-message-text">${escapeHtml(msg.content)}</div>
+                            ${attachmentsHtml}
                             ${msg.tools?.length ? msg.tools.map(t => `<div class="chat-tool-call">🔧 ${t}</div>`).join('') : ''}
                             <div class="chat-message-time">${msg.timestamp ? formatTime(msg.timestamp) : ''}</div>
                         </div>
@@ -2681,10 +2957,35 @@
 
         async function sendChatMessage() {
             const content = chatInput.value.trim();
-            if (!content || !selectedChatAgentId) return;
+            const hasContent = !!content;
+            const hasFiles = pendingFiles.length > 0;
+
+            if (!hasContent && !hasFiles) return;
+            if (!selectedChatAgentId) return;
 
             const agent = agents.find(a => a.id === selectedChatAgentId);
             if (!agent) return;
+
+            chatSendBtn.disabled = true;
+
+            // Upload files first if any
+            let uploadedFiles = [];
+            let attachmentInfos = [];
+            if (hasFiles) {
+                try {
+                    uploadedFiles = await uploadFiles(pendingFiles);
+                    attachmentInfos = uploadedFiles.map(f => ({
+                        filename: f.originalName,
+                        filepath: f.filepath,
+                        type: f.type
+                    }));
+                } catch (err) {
+                    console.error('File upload failed:', err);
+                    alert('Failed to upload files');
+                    chatSendBtn.disabled = false;
+                    return;
+                }
+            }
 
             // Add message to local state immediately
             if (!chatMessages[selectedChatAgentId]) {
@@ -2692,7 +2993,8 @@
             }
             chatMessages[selectedChatAgentId].push({
                 role: 'user',
-                content,
+                content: content || '(file attachment)',
+                attachments: attachmentInfos,
                 timestamp: new Date().toISOString()
             });
             chatShouldAutoScroll = true; // Re-enable auto-scroll when sending
@@ -2700,16 +3002,19 @@
             scrollChatToBottom(true); // Force scroll after sending
             renderChatList();
 
-            // Clear input
+            // Clear input and files
             chatInput.value = '';
             chatInput.style.height = 'auto';
-            chatSendBtn.disabled = true;
+            clearPendingFiles();
 
             try {
                 const res = await fetch(`${API_BASE}/agents/${selectedChatAgentId}/message`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content })
+                    body: JSON.stringify({
+                        content: content || '',
+                        attachments: uploadedFiles.map(f => f.filepath)
+                    })
                 });
 
                 if (!res.ok) {

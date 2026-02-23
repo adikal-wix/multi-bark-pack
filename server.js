@@ -332,8 +332,69 @@ app.get('/api/agents/:id/messages', (req, res) => {
         content: turn.content,
         timestamp: turn.timestamp,
         tools: turn.tools || [],
+        attachments: turn.files || [],
     }));
     res.json(messages);
+});
+
+// REST API: Upload files (base64)
+app.post('/api/upload', express.json({ limit: '50mb' }), (req, res) => {
+    const { files } = req.body;
+    if (!files || !Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({ error: 'No files provided' });
+    }
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.txt', '.md', '.json', '.js', '.ts', '.py', '.sh', '.css', '.html'];
+    const results = [];
+
+    for (const file of files) {
+        if (!file.name || !file.data) continue;
+
+        // Validate extension
+        const ext = path.extname(file.name).toLowerCase();
+        if (!allowedExts.includes(ext)) {
+            return res.status(400).json({ error: `File type not allowed: ${ext}` });
+        }
+
+        // Decode base64
+        const buffer = Buffer.from(file.data, 'base64');
+        if (buffer.length > maxSize) {
+            return res.status(400).json({ error: `File too large: ${file.name} (max 10MB)` });
+        }
+
+        // Save file
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const filename = `upload-${Date.now()}-${safeName}`;
+        const filepath = path.join(TMP_DIR, filename);
+        writeFileSync(filepath, buffer);
+
+        results.push({
+            originalName: file.name,
+            filename,
+            filepath,
+            type: file.type || 'application/octet-stream',
+            size: buffer.length
+        });
+    }
+
+    res.json(results);
+});
+
+// REST API: Serve uploaded files
+app.get('/api/files/:filename', (req, res) => {
+    const filename = req.params.filename;
+    // Security: prevent directory traversal
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+        return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const filepath = path.join(TMP_DIR, filename);
+    if (!existsSync(filepath)) {
+        return res.status(404).json({ error: 'File not found' });
+    }
+
+    res.sendFile(filepath);
 });
 
 // REST API: Send message to agent
@@ -341,9 +402,12 @@ app.post('/api/agents/:id/message', async (req, res) => {
     const agent = agents.get(req.params.id);
     if (!agent) return res.status(404).json({ error: 'Agent not found' });
 
-    const { content } = req.body;
-    if (!content || !content.trim()) {
-        return res.status(400).json({ error: 'Message content required' });
+    const { content, attachments } = req.body;
+    const hasContent = content && content.trim();
+    const hasAttachments = attachments && Array.isArray(attachments) && attachments.length > 0;
+
+    if (!hasContent && !hasAttachments) {
+        return res.status(400).json({ error: 'Message content or attachments required' });
     }
 
     // Check if agent is already running
@@ -352,8 +416,37 @@ app.post('/api/agents/:id/message', async (req, res) => {
         return res.status(409).json({ error: 'Agent is busy' });
     }
 
-    // Use the UI adapter to run the command
-    const prompt = content.trim();
+    // Build prompt with file context (following existing adapter pattern)
+    let prompt = content ? content.trim() : '';
+
+    // Add attachment context to prompt
+    const attachmentInfos = [];
+    if (hasAttachments) {
+        for (const filepath of attachments) {
+            // Verify file exists and is in TMP_DIR
+            if (!existsSync(filepath) || !filepath.startsWith(TMP_DIR)) {
+                continue;
+            }
+
+            const filename = path.basename(filepath);
+            const ext = path.extname(filename).toLowerCase();
+            const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
+
+            attachmentInfos.push({
+                filename,
+                filepath,
+                type: isImage ? 'image' : 'file'
+            });
+
+            if (isImage) {
+                // Follow the existing pattern from other adapters
+                prompt = `[Image attached: ${filepath}]\nUse the Read tool to view this image, then respond.\n\n${prompt}`;
+            } else {
+                // For other files, add as file reference
+                prompt = `[File attached: ${filepath}]\nUse the Read tool to view this file.\n\n${prompt}`;
+            }
+        }
+    }
 
     // Extract model tags from message
     let model = null;
@@ -368,13 +461,14 @@ app.post('/api/agents/:id/message', async (req, res) => {
 
     if (model) agent.model = model;
 
-    // Save user turn to history
-    historyManager.addUserTurn(agent.id, cleanPrompt);
+    // Save user turn to history (with attachments)
+    historyManager.addUserTurn(agent.id, cleanPrompt, attachmentInfos.length > 0 ? attachmentInfos : undefined);
 
-    // Broadcast the user message via WebSocket
+    // Broadcast the user message via WebSocket (with attachments for display)
     broadcastChatMessage(agent.id, {
         role: 'user',
-        content: cleanPrompt,
+        content: content ? content.trim() : '(file attachment)',
+        attachments: attachmentInfos,
         timestamp: new Date().toISOString(),
     });
 
