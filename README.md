@@ -534,6 +534,23 @@ Built-in skills:
 
 Skills are stored in `.claude/skills/` as SKILL.md files (YAML frontmatter + markdown). Create custom skills by adding new directories there.
 
+### Security guard
+
+Incoming messages from external adapters (Telegram, WhatsApp, Slack) are optionally screened before reaching any pup. The guard uses Claude Code CLI (`claude -p`) with Haiku to classify messages against 5 threat categories:
+
+- **Personal data extraction** — credit cards, SSNs, passwords, API keys
+- **Destructive commands** — `rm -rf /`, format disk, fork bombs
+- **Prompt injection** — attempts to override system instructions or jailbreak
+- **Fraud** — impersonation, social engineering, phishing
+- **Malware** — viruses, ransomware, exploits, keyloggers
+
+No API key needed — uses your existing Claude Code subscription. UI messages bypass screening. Blocked messages are logged to `.bark-tmp/security.log`.
+
+```env
+SECURITY_GUARD_ENABLED=true    # disabled by default
+SECURITY_GUARD_FAIL_OPEN=true  # CLI errors allow messages through
+```
+
 ### Agent fallback
 
 When a pup hits an error (context window full, rate limit, timeout, crash), bark-pack automatically recovers:
@@ -675,6 +692,10 @@ multi-bark-pack/
     detector.js       Failure classification
     injector.js       Context injection
     config.js         Configuration
+  security/           Message security screening
+    index.js          Security guard (claude CLI)
+    prompt.js         Threat classification prompt
+    logger.js         Blocked message logger
   skills/             Cross-backend skill system
     index.js          Skills manager (loads at startup)
     parser.js         SKILL.md parser

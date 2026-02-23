@@ -1,13 +1,12 @@
-const Anthropic = require('@anthropic-ai/sdk');
+const { execFile } = require('child_process');
 const { SYSTEM_PROMPT } = require('./prompt');
 const logger = require('./logger');
 
 const ENABLED = process.env.SECURITY_GUARD_ENABLED === 'true';
-const MODEL = process.env.SECURITY_GUARD_MODEL || 'claude-haiku-4-5-20251001';
 const FAIL_OPEN = process.env.SECURITY_GUARD_FAIL_OPEN !== 'false';
 const MAX_TEXT_LENGTH = 4000;
+const TIMEOUT_MS = 30_000;
 
-let client = null;
 let active = false;
 
 function initialize() {
@@ -16,19 +15,13 @@ function initialize() {
         return { enabled: false };
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
-        console.log('  \u26a0\ufe0f Security Guard: ANTHROPIC_API_KEY not set \u2014 disabling');
-        return { enabled: false, error: 'No API key' };
-    }
-
-    client = new Anthropic();
     active = true;
-    console.log(`  \ud83d\udee1\ufe0f Security Guard: enabled (model: ${MODEL}, fail-open: ${FAIL_OPEN})`);
+    console.log(`  \ud83d\udee1\ufe0f Security Guard: enabled (via claude CLI, fail-open: ${FAIL_OPEN})`);
     return { enabled: true };
 }
 
 async function screen(text) {
-    if (!active || !client) {
+    if (!active) {
         return { allowed: true, category: null, reason: null, latencyMs: 0 };
     }
 
@@ -36,18 +29,12 @@ async function screen(text) {
         ? text.substring(0, MAX_TEXT_LENGTH) + '... [truncated]'
         : text;
 
+    const prompt = `${SYSTEM_PROMPT}\n\n---\n\nMessage to screen:\n${truncated}`;
     const start = Date.now();
 
     try {
-        const response = await client.messages.create({
-            model: MODEL,
-            max_tokens: 256,
-            system: SYSTEM_PROMPT,
-            messages: [{ role: 'user', content: truncated }],
-        });
-
+        const output = await runClaude(prompt);
         const latencyMs = Date.now() - start;
-        const output = response.content[0]?.text || '';
         const verdict = parseVerdict(output);
 
         if (!verdict.allowed) {
@@ -73,6 +60,25 @@ async function screen(text) {
             latencyMs,
         };
     }
+}
+
+function runClaude(prompt) {
+    return new Promise((resolve, reject) => {
+        const env = { ...process.env };
+        delete env.CLAUDECODE;
+
+        const child = execFile('claude', ['-p', prompt, '--model', 'haiku', '--output-format', 'text'], {
+            timeout: TIMEOUT_MS,
+            maxBuffer: 1024 * 64,
+            env,
+        }, (err, stdout, stderr) => {
+            if (err) {
+                reject(new Error(err.killed ? 'Security check timed out' : (stderr || err.message)));
+                return;
+            }
+            resolve(stdout.trim());
+        });
+    });
 }
 
 function parseVerdict(output) {
