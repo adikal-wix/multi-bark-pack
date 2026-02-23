@@ -19,7 +19,7 @@ function createTelegramAdapter({ token, chatId }) {
     let pollTimeout = null;
     let consecutivePollErrors = 0;
 
-    async function api(method, body) {
+    async function api(method, body, retries = 3) {
         const res = await fetch(`${BASE}/${method}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -27,6 +27,13 @@ function createTelegramAdapter({ token, chatId }) {
         });
         const data = await res.json();
         if (!data.ok) {
+            // Handle rate limiting with retry
+            if (data.error_code === 429 && data.parameters?.retry_after && retries > 0) {
+                const delay = (data.parameters.retry_after + 1) * 1000;
+                console.log(`  ⏳ Telegram rate limited, waiting ${data.parameters.retry_after}s...`);
+                await new Promise(r => setTimeout(r, delay));
+                return api(method, body, retries - 1);
+            }
             throw new Error(`Telegram API ${method}: ${data.description || 'unknown error'}`);
         }
         return data.result;
