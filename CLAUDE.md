@@ -35,6 +35,10 @@ Node.js, whatsapp-web.js, @slack/web-api, @slack/socket-mode, tmux, whisper.cpp 
   - `detector.js` — Failure classification
   - `injector.js` — Context injection
   - `config.js` — Configuration
+- `security/` — Message security screening
+  - `index.js` — Security guard: LLM-based screening via Claude Haiku
+  - `prompt.js` — System prompt for threat classification
+  - `logger.js` — Blocked message logging to `.bark-tmp/security.log`
 - `skills/` — Cross-backend skill system
   - `index.js` — Skills manager (loads once at startup)
   - `parser.js` — SKILL.md parser (YAML frontmatter + markdown)
@@ -124,6 +128,8 @@ Agents are locked to their backend once spawned. `/reset` keeps the same backend
 
 Context is preserved via rolling summaries + recent turns. History files stored in `.bark-tmp/{id}.history.json`.
 
+**Security Guard:** Optional LLM-based screening for external adapter messages (Telegram, WhatsApp, Slack). Uses Claude Haiku to classify messages against 5 threat categories (personal data extraction, destructive commands, prompt injection, fraud, malware). Blocked messages are logged to `.bark-tmp/security.log`. UI messages bypass screening. Disabled by default; enable with `SECURITY_GUARD_ENABLED=true`. Fails open by default (API errors allow messages through).
+
 ## Configuration
 
 ```bash
@@ -151,6 +157,12 @@ FALLBACK_ENABLED=true
 AGENT_TIMEOUT=600000
 FALLBACK_MAX_RETRIES=3
 FALLBACK_BACKEND_PRIORITY=claude-code,cursor,codex,gemini
+
+# Security Guard (LLM-based message screening, external adapters only)
+SECURITY_GUARD_ENABLED=true
+SECURITY_GUARD_MODEL=claude-haiku-4-5-20251001
+SECURITY_GUARD_FAIL_OPEN=true
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 ## Key constraints

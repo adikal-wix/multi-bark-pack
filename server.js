@@ -6,6 +6,7 @@ const backends = require('./backends');
 const historyManager = require('./history');
 const fallbackManager = require('./fallback');
 const skillsManager = require('./skills');
+const securityGuard = require('./security');
 const { exec, execSync } = require('child_process');
 const { writeFileSync, readFileSync, existsSync, mkdirSync, unlinkSync, readdirSync } = require('fs');
 const crypto = require('crypto');
@@ -2251,6 +2252,19 @@ async function onMessage(msg) {
     // Prepend media context to body for all routes
     const fullBody = mediaContext + (body || 'Respond to the attached media.');
 
+    // --- Security Guard: screen message before routing ---
+    if (securityGuard.isEnabled()) {
+        const verdict = await securityGuard.screen(body || '');
+        if (!verdict.allowed) {
+            console.log(`  \ud83d\udee1\ufe0f BLOCKED [${verdict.category}]: "${(body || '').substring(0, 80)}" (${verdict.latencyMs}ms)`);
+            await adapter.send(`\ud83d\udee1\ufe0f Message blocked: ${verdict.reason}`);
+            return;
+        }
+        if (verdict.latencyMs > 0) {
+            console.log(`  \ud83d\udee1\ufe0f Security check passed (${verdict.latencyMs}ms)`);
+        }
+    }
+
     // --- Route 1: @mention at start of message (first match routes, typos error out) ---
     const atMatch = body.match(/^@(\S+)/);
     if (atMatch) {
@@ -2355,6 +2369,9 @@ async function main() {
     // Initialize skills (load once at startup)
     console.log('Loading skills...');
     skillsManager.initialize();
+
+    // Initialize security guard
+    securityGuard.initialize();
 
     // Start Management UI HTTP server immediately (before adapters)
     httpServer.listen(UI_PORT, () => {
