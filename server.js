@@ -8,6 +8,7 @@ const fallbackManager = require('./fallback');
 const skillsManager = require('./skills');
 const securityGuard = require('./security');
 const usageTracker = require('./usage');
+const timeline = require('./timeline');
 const { exec, execSync } = require('child_process');
 const { writeFileSync, readFileSync, existsSync, mkdirSync, unlinkSync, readdirSync } = require('fs');
 const crypto = require('crypto');
@@ -254,6 +255,17 @@ app.get('/api/backends', async (req, res) => {
 // REST API: Usage
 app.get('/api/usage', (req, res) => {
     res.json(usageTracker.getAll());
+});
+
+// REST API: Timeline
+app.get('/api/timeline', (req, res) => {
+    const { limit = 100, offset = 0, agentId, type } = req.query;
+    res.json(timeline.getAll({
+        limit: parseInt(limit, 10),
+        offset: parseInt(offset, 10),
+        agentId: agentId || null,
+        eventType: type || null,
+    }));
 });
 
 // REST API: Packs
@@ -558,6 +570,7 @@ app.post('/api/agents', async (req, res) => {
     broadcastAgents();
 
     console.log(`  🐕 Spawned ${agentName} from UI (tmux: ${tmuxSession})`);
+    timeline.emit('spawn', { agentId: id, agentName, meta: { source: 'ui', backend: backend.name } });
 
     // Add attachment context to prompt (same pattern as /api/agents/:id/message)
     let prompt = cleanMessage;
@@ -676,6 +689,7 @@ function runAgentCommandForUI(agent, prompt) {
     try {
         execSync(`tmux send-keys -t "${agent.tmuxSession}" "bash '${scriptFile}'" Enter`, EXEC_OPTS);
         console.log(`  💬 UI message sent to ${agent.name}`);
+        timeline.emit('message_sent', { agentId: agent.id, agentName: agent.name, meta: { source: 'ui' } });
     } catch (e) {
         console.error(`  ❌ Failed to run command in tmux for ${agent.name}: ${e.message}`);
         if (existsSync(runningFile)) unlinkSync(runningFile);
@@ -757,6 +771,7 @@ function pollAgentOutputForUI(agent, runningFile, progressFile, outFile, doneFil
 
             // Broadcast stream end
             broadcastToWS({ type: 'agent_stream_end', agentId: agent.id });
+            timeline.emit('response', { agentId: agent.id, agentName: agent.name, meta: { chars: output.length, exitCode } });
 
             saveState();
             broadcastAgents();
@@ -766,6 +781,7 @@ function pollAgentOutputForUI(agent, runningFile, progressFile, outFile, doneFil
         // Check timeout
         if (Date.now() - startTime > timeout) {
             console.log(`  ⏰ Agent ${agent.name} timed out`);
+            timeline.emit('timeout', { agentId: agent.id, agentName: agent.name });
             if (existsSync(runningFile)) unlinkSync(runningFile);
             historyManager.recordError(agent.id, 'timeout', 'Command timed out');
             broadcastToWS({ type: 'agent_stream_end', agentId: agent.id });
@@ -840,6 +856,7 @@ wss.on('connection', (ws) => {
         ...[...deletedAgents.values()].map(a => ({ ...a, isRunning: false })),
     ];
     ws.send(JSON.stringify({ type: 'agents', agents: allAgents }));
+    ws.send(JSON.stringify({ type: 'timeline_init', events: timeline.getRecent(50) }));
 
     ws.on('close', () => {
         wsClients.delete(ws);
@@ -998,6 +1015,7 @@ async function spawnAgent(prompt, adapter, parentId = null, reuseMsgId = null, r
     saveState();
 
     console.log(`  🐕 Spawned ${name} (tmux: ${tmuxSession})`);
+    timeline.emit('spawn', { agentId: id, agentName: name, meta: { source: 'adapter', backend: backend.name } });
     await updatePinnedStatus();
 
     // Send one message that will be edited through the whole lifecycle:
@@ -1030,8 +1048,10 @@ async function sendToAgent(agent, text, adapter, reuseMsgId = null, replyToId = 
         agent.model = model;
         saveState();
         console.log(`  🔄 ${agent.name} switched to ${model}`);
+        timeline.emit('model_switch', { agentId: agent.id, agentName: agent.name, meta: { model } });
     }
     console.log(`  📤 Sent to ${agent.name}: ${text.substring(0, 80)}`);
+    timeline.emit('message_sent', { agentId: agent.id, agentName: agent.name, meta: { preview: text.substring(0, 80) } });
     // For follow-ups, send a thinking message that will be edited
     let liveMsgId;
     const icon = getAgentIcon(agent);
@@ -1183,6 +1203,7 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
         if (fallbackManager.detector.isTimedOut(commandStartTime, commandTimeout)) {
             clearInterval(poll);
             console.log(`  ⏰ ${agent.name} timed out after ${commandTimeout / 1000}s`);
+            timeline.emit('timeout', { agentId: agent.id, agentName: agent.name });
 
             // Record timeout error
             historyManager.recordError(agent.id, 'timeout', 'Command timed out');
@@ -1205,6 +1226,7 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
                     agent.cwd = newCwd;
                     saveState();
                     console.log(`  📂 ${agent.name} working in: ${newCwd}`);
+                    timeline.emit('cwd_change', { agentId: agent.id, agentName: agent.name, meta: { cwd: newCwd } });
                 }
             }
         } catch {}
@@ -1305,6 +1327,7 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
             saveState();
             console.log(`  ✅ ${agent.name} responded (${output.length} chars)`);
         }
+        timeline.emit('response', { agentId: agent.id, agentName: agent.name, meta: { chars: output.length, exitCode: parseInt(exitCode, 10) } });
 
         // Send any files the pup placed in its send directory
         try {
@@ -1316,6 +1339,7 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
                         const caption = `📎 [${agent.name}]: ${file}`;
                         await adapter.sendFile(filePath, caption, liveMsgId);
                         console.log(`  📎 ${agent.name} sent file: ${file}`);
+                        timeline.emit('file_sent', { agentId: agent.id, agentName: agent.name, meta: { file } });
                     } catch (e) {
                         console.log(`  ⚠️ ${agent.name} failed to send file ${file}: ${e.message}`);
                     }
@@ -1362,6 +1386,7 @@ function softDeleteAgent(agent) {
     deletedAgents.set(agent.id, agent);
     saveState();
     console.log(`  🗑️ Cleared ${agent.name} (${agent.id}) — moved to losts`);
+    timeline.emit('clear', { agentId: agent.id, agentName: agent.name });
 }
 
 function hardDeleteAgent(agent, fromMap = agents) {
@@ -1378,6 +1403,7 @@ function hardDeleteAgent(agent, fromMap = agents) {
     fromMap.delete(agent.id);
     saveState();
     console.log(`  ❌ Hard-deleted ${agent.name} (${agent.id}) — name freed`);
+    timeline.emit('hard_delete', { agentId: agent.id, agentName: agent.name });
 }
 
 // --- Extracted command functions (shared by chat commands + REST API) ---
@@ -1408,7 +1434,10 @@ function stopAgents(names) {
         }
     }
 
-    if (stopped.length) console.log(`  🛑 Stopped: ${stopped.join(', ')}`);
+    if (stopped.length) {
+        console.log(`  🛑 Stopped: ${stopped.join(', ')}`);
+        timeline.emit('stop', { agentName: stopped.join(', ') });
+    }
     updatePinnedStatus();
     return { stopped, notFound };
 }
@@ -1501,6 +1530,7 @@ function rebornAgent(name) {
 
     saveState();
     console.log(`  🐕 Reborn ${dead.name} (${dead.id}) with session ${dead.sessionId}`);
+    timeline.emit('reborn', { agentId: dead.id, agentName: dead.name });
     updatePinnedStatus();
     return { success: true, agent: dead };
 }
@@ -1518,6 +1548,7 @@ function resetAgents(names) {
             historyManager.clear(agent.id);
             try { execSync(`rm -f "${path.join(TMP_DIR, agent.id)}".*`, EXEC_OPTS); } catch {}
             console.log(`  🔄 Reset ${agent.name} — new session ${agent.sessionId}`);
+            timeline.emit('reset', { agentId: agent.id, agentName: agent.name });
             reset.push(agent.name);
         }
         saveState();
@@ -1532,6 +1563,7 @@ function resetAgents(names) {
                 historyManager.clear(agent.id);
                 try { execSync(`rm -f "${path.join(TMP_DIR, agent.id)}".*`, EXEC_OPTS); } catch {}
                 console.log(`  🔄 Reset ${agent.name} — new session ${agent.sessionId}`);
+                timeline.emit('reset', { agentId: agent.id, agentName: agent.name });
                 reset.push(agent.name);
             } else {
                 notFound.push(name);
@@ -2285,6 +2317,7 @@ async function onMessage(msg) {
         const verdict = await securityGuard.screen(body || '');
         if (!verdict.allowed) {
             console.log(`  \ud83d\udee1\ufe0f BLOCKED [${verdict.category}]: "${(body || '').substring(0, 80)}" (${verdict.latencyMs}ms)`);
+            timeline.emit('security_block', { meta: { category: verdict.category, reason: verdict.reason } });
             await adapter.send(`\ud83d\udee1\ufe0f Message blocked: ${verdict.reason}`);
             return;
         }
@@ -2403,6 +2436,9 @@ async function main() {
 
     // Initialize usage tracker
     usageTracker.initialize();
+
+    // Initialize activity timeline
+    timeline.initialize({ broadcast: broadcastToWS });
 
     // Start Management UI HTTP server immediately (before adapters)
     httpServer.listen(UI_PORT, () => {

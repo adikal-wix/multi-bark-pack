@@ -42,6 +42,9 @@ Node.js, whatsapp-web.js, @slack/web-api, @slack/socket-mode, tmux, whisper.cpp 
 - `usage/` — Cost and token usage tracking
   - `index.js` — Usage tracker: record, aggregate, query per-agent costs
   - `storage.js` — Atomic JSON storage to `.bark-tmp/usage.json`
+- `timeline/` — Activity timeline: event capture, JSONL storage, real-time broadcast
+  - `index.js` — Timeline API: emit events, in-memory ring buffer (500), getAll/getRecent
+  - `storage.js` — JSONL append storage to `.bark-tmp/timeline.jsonl`
 - `skills/` — Cross-backend skill system
   - `index.js` — Skills manager (loads once at startup)
   - `parser.js` — SKILL.md parser (YAML frontmatter + markdown)

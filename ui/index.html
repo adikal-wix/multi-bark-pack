@@ -410,6 +410,63 @@
         }
 
         /* ═══════════════════════════════════════════════════════════════
+           TIMELINE PANEL
+           ═══════════════════════════════════════════════════════════════ */
+        .timeline-list {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            overflow-y: auto;
+            flex: 1;
+            padding-bottom: 16px;
+        }
+        .timeline-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 0.85rem;
+        }
+        .timeline-item:hover {
+            background: var(--bg-hover);
+        }
+        .timeline-time {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            white-space: nowrap;
+            min-width: 55px;
+        }
+        .timeline-icon {
+            font-size: 1rem;
+            min-width: 20px;
+            text-align: center;
+        }
+        .timeline-agent {
+            color: var(--cyan);
+            font-weight: 600;
+            min-width: 80px;
+        }
+        .timeline-message {
+            color: var(--text-dim);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .timeline-badge {
+            font-size: 0.7rem;
+            padding: 1px 6px;
+            border-radius: 3px;
+            background: var(--bg-hover);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
            STATS PANEL
            ═══════════════════════════════════════════════════════════════ */
         .stats-summary {
@@ -1959,6 +2016,7 @@
             <button class="tab active" data-tab="pups">Pups</button>
             <button class="tab" data-tab="chat">Chat</button>
             <button class="tab" data-tab="admin">Admin</button>
+            <button class="tab" data-tab="timeline">Timeline</button>
             <button class="tab" data-tab="stats">Stats</button>
         </div>
 
@@ -2149,6 +2207,36 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timeline Panel -->
+        <div class="tab-panel" id="panel-timeline">
+            <div class="section-header">
+                <span class="section-title">Activity Timeline</span>
+                <span class="section-count" id="timeline-count">0</span>
+                <div class="section-line"></div>
+            </div>
+
+            <div class="filter-bar" id="timeline-filters">
+                <div class="filter-group">
+                    <span class="filter-label">Type</span>
+                    <div class="filter-chips" id="timeline-type-filters">
+                        <button class="filter-chip active" data-tl-type="all">All</button>
+                        <button class="filter-chip" data-tl-type="spawn">Spawns</button>
+                        <button class="filter-chip" data-tl-type="response">Responses</button>
+                        <button class="filter-chip" data-tl-type="error">Errors</button>
+                        <button class="filter-chip" data-tl-type="lifecycle">Lifecycle</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-list" id="timeline-list">
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <div class="empty-text">No activity yet</div>
+                    <div class="empty-hint">Events appear here as pups work</div>
                 </div>
             </div>
         </div>
@@ -2486,6 +2574,19 @@
                         renderStats(data.usage);
                     }
                     break;
+                case 'timeline_init':
+                    timelineEvents = data.events || [];
+                    if (document.querySelector('.tab.active')?.dataset.tab === 'timeline') {
+                        renderTimeline();
+                    }
+                    break;
+                case 'timeline_event':
+                    timelineEvents.push(data.event);
+                    if (timelineEvents.length > 500) timelineEvents.shift();
+                    if (document.querySelector('.tab.active')?.dataset.tab === 'timeline') {
+                        renderTimeline();
+                    }
+                    break;
             }
         }
 
@@ -2780,6 +2881,10 @@
                 // Fetch packs when admin tab is opened
                 if (tabName === 'admin') {
                     fetchPacks();
+                }
+                // Render timeline when timeline tab is opened
+                if (tabName === 'timeline') {
+                    renderTimeline();
                 }
                 // Fetch usage when stats tab is opened
                 if (tabName === 'stats') {
@@ -3631,6 +3736,85 @@
         setTheme(savedTheme);
 
         themeToggle.addEventListener('click', toggleTheme);
+
+        // ═══════════════════════════════════════════════════════════════
+        // TIMELINE
+        // ═══════════════════════════════════════════════════════════════
+        const TIMELINE_ICONS = {
+            spawn: '\ud83d\udc15', reborn: '\ud83d\udc15', message_sent: '\ud83d\udce4', response: '\u2705',
+            timeout: '\u23f0', model_switch: '\ud83d\udd04', skill_inject: '\u26a1',
+            cwd_change: '\ud83d\udcc2', file_sent: '\ud83d\udcce', stop: '\ud83d\uded1',
+            clear: '\ud83d\uddd1\ufe0f', hard_delete: '\u274c', reset: '\ud83d\udd04',
+            security_block: '\ud83d\udee1\ufe0f', server: '\ud83d\udce1',
+        };
+        const TIMELINE_GROUPS = {
+            spawn: ['spawn', 'reborn'],
+            response: ['response', 'message_sent'],
+            error: ['timeout', 'security_block'],
+            lifecycle: ['clear', 'hard_delete', 'reset', 'stop', 'model_switch', 'skill_inject', 'cwd_change', 'file_sent', 'server'],
+        };
+        let timelineEvents = [];
+        let timelineFilter = 'all';
+
+        function formatTimeAgo(isoStr) {
+            const diff = Date.now() - new Date(isoStr).getTime();
+            const secs = Math.floor(diff / 1000);
+            if (secs < 60) return `${secs}s ago`;
+            const mins = Math.floor(secs / 60);
+            if (mins < 60) return `${mins}m ago`;
+            const hrs = Math.floor(mins / 60);
+            if (hrs < 24) return `${hrs}h ago`;
+            const days = Math.floor(hrs / 24);
+            return `${days}d ago`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function renderTimeline() {
+            const list = document.getElementById('timeline-list');
+            const countEl = document.getElementById('timeline-count');
+            let filtered = timelineEvents;
+
+            if (timelineFilter !== 'all' && TIMELINE_GROUPS[timelineFilter]) {
+                filtered = filtered.filter(e => TIMELINE_GROUPS[timelineFilter].includes(e.type));
+            }
+
+            countEl.textContent = filtered.length;
+
+            if (filtered.length === 0) {
+                list.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">\ud83d\udccb</div>
+                        <div class="empty-text">No activity yet</div>
+                        <div class="empty-hint">Events appear here as pups work</div>
+                    </div>`;
+                return;
+            }
+
+            list.innerHTML = filtered.slice().reverse().map(e => `
+                <div class="timeline-item" data-agent-id="${e.agentId || ''}">
+                    <span class="timeline-time">${formatTimeAgo(e.timestamp)}</span>
+                    <span class="timeline-icon">${TIMELINE_ICONS[e.type] || '\u2022'}</span>
+                    ${e.agentName ? `<span class="timeline-agent">${escapeHtml(e.agentName)}</span>` : ''}
+                    <span class="timeline-message">${escapeHtml(e.message)}</span>
+                    <span class="timeline-badge">${e.type}</span>
+                </div>
+            `).join('');
+        }
+
+        // Timeline filter chips
+        document.getElementById('timeline-type-filters').addEventListener('click', (e) => {
+            const chip = e.target.closest('[data-tl-type]');
+            if (!chip) return;
+            document.querySelectorAll('#timeline-type-filters .filter-chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            timelineFilter = chip.dataset.tlType;
+            renderTimeline();
+        });
 
         // ═══════════════════════════════════════════════════════════════
         // STATS
