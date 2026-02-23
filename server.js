@@ -480,10 +480,12 @@ app.post('/api/agents/:id/message', async (req, res) => {
 
 // REST API: Create new agent
 app.post('/api/agents', async (req, res) => {
-    const { name, message, backend: backendName, model } = req.body;
+    const { name, message, backend: backendName, model, attachments } = req.body;
+    const hasMessage = message && message.trim();
+    const hasAttachments = attachments && Array.isArray(attachments) && attachments.length > 0;
 
-    if (!message || !message.trim()) {
-        return res.status(400).json({ error: 'Initial message required' });
+    if (!hasMessage && !hasAttachments) {
+        return res.status(400).json({ error: 'Initial message or attachments required' });
     }
 
     // Validate backend if specified
@@ -492,7 +494,7 @@ app.post('/api/agents', async (req, res) => {
     }
 
     // Extract tags from message
-    let cleanMessage = message.trim();
+    let cleanMessage = hasMessage ? message.trim() : '';
     let requestedModel = model || null;
     let requestedBackend = backendName || null;
 
@@ -550,9 +552,30 @@ app.post('/api/agents', async (req, res) => {
 
     console.log(`  🐕 Spawned ${agentName} from UI (tmux: ${tmuxSession})`);
 
+    // Add attachment context to prompt (same pattern as /api/agents/:id/message)
+    let prompt = cleanMessage;
+    const attachmentInfos = [];
+    if (hasAttachments) {
+        for (const filepath of attachments) {
+            if (!existsSync(filepath) || !filepath.startsWith(TMP_DIR)) continue;
+
+            const filename = path.basename(filepath);
+            const ext = path.extname(filename).toLowerCase();
+            const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
+
+            attachmentInfos.push({ filename, filepath, type: isImage ? 'image' : 'file' });
+
+            if (isImage) {
+                prompt = `[Image attached: ${filepath}]\nUse the Read tool to view this image, then respond.\n\n${prompt}`;
+            } else {
+                prompt = `[File attached: ${filepath}]\nUse the Read tool to view this file.\n\n${prompt}`;
+            }
+        }
+    }
+
     // Save user turn and run command
-    historyManager.addUserTurn(id, cleanMessage);
-    runAgentCommandForUI(agent, cleanMessage);
+    historyManager.addUserTurn(id, prompt, attachmentInfos.length > 0 ? attachmentInfos : undefined);
+    runAgentCommandForUI(agent, prompt);
 
     res.json(agent);
 });

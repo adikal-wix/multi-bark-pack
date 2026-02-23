@@ -1685,6 +1685,17 @@
             justify-content: flex-end;
         }
 
+        .new-pup-attach-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .new-pup-attach-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
         @media (max-width: 768px) {
             .chat-container {
                 grid-template-columns: 1fr;
@@ -1891,6 +1902,16 @@
             <div class="new-chat-dialog-field">
                 <label class="new-chat-dialog-label">Initial Message</label>
                 <textarea class="new-chat-dialog-input" id="new-chat-message" placeholder="What should this pup do?" rows="3"></textarea>
+            </div>
+            <div class="new-chat-dialog-field">
+                <label class="new-chat-dialog-label">Attachments</label>
+                <div class="chat-file-preview" id="new-pup-file-preview"></div>
+                <div class="new-pup-attach-row">
+                    <button class="chat-attach-btn" id="new-pup-attach-btn" title="Attach file">📎</button>
+                    <span class="new-pup-attach-hint">Add images, PDFs, or code files</span>
+                </div>
+                <input type="file" id="new-pup-file-input" style="display: none"
+                       accept="image/*,.pdf,.txt,.md,.json,.js,.ts,.py,.sh,.css,.html" multiple>
             </div>
             <div class="new-chat-dialog-actions">
                 <button class="btn" id="new-chat-cancel">Cancel</button>
@@ -2656,9 +2677,13 @@
         const newChatDialog = document.getElementById('new-chat-dialog');
         const newChatName = document.getElementById('new-chat-name');
         const newChatMessage = document.getElementById('new-chat-message');
+        const newPupFilePreview = document.getElementById('new-pup-file-preview');
+        const newPupAttachBtn = document.getElementById('new-pup-attach-btn');
+        const newPupFileInput = document.getElementById('new-pup-file-input');
 
         // File upload state
         let pendingFiles = [];
+        let newPupPendingFiles = [];
 
         // File upload event listeners
         chatAttachBtn.addEventListener('click', () => chatFileInput.click());
@@ -2666,6 +2691,14 @@
         chatFileInput.addEventListener('change', (e) => {
             handleFiles(e.target.files);
             chatFileInput.value = ''; // Reset for same file selection
+        });
+
+        // New pup modal file upload
+        newPupAttachBtn.addEventListener('click', () => newPupFileInput.click());
+
+        newPupFileInput.addEventListener('change', (e) => {
+            handleNewPupFiles(e.target.files);
+            newPupFileInput.value = '';
         });
 
         // Drag and drop
@@ -2753,6 +2786,53 @@
             pendingFiles = [];
             renderFilePreview();
         }
+
+        // New pup modal file handling (reuses same validation as chat)
+        function handleNewPupFiles(fileList) {
+            const maxSize = 10 * 1024 * 1024;
+            const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.txt', '.md', '.json', '.js', '.ts', '.py', '.sh', '.css', '.html'];
+
+            for (const file of fileList) {
+                if (file.size > maxSize) {
+                    alert(`File "${file.name}" is too large (max 10MB)`);
+                    continue;
+                }
+                const ext = '.' + file.name.split('.').pop().toLowerCase();
+                const isImage = file.type.startsWith('image/');
+                if (!isImage && !allowedExts.includes(ext)) {
+                    alert(`File type not supported: ${file.name}`);
+                    continue;
+                }
+                newPupPendingFiles.push(file);
+            }
+            renderNewPupFilePreview();
+        }
+
+        function renderNewPupFilePreview() {
+            if (newPupPendingFiles.length === 0) {
+                newPupFilePreview.innerHTML = '';
+                return;
+            }
+            newPupFilePreview.innerHTML = newPupPendingFiles.map((file, i) => {
+                const isImage = file.type.startsWith('image/');
+                const icon = isImage ? '' : getFileIcon(file.name);
+                const preview = isImage
+                    ? `<img src="${URL.createObjectURL(file)}" alt="${escapeHtml(file.name)}">`
+                    : `<span class="file-icon">${icon}</span>`;
+                return `
+                    <div class="chat-file-preview-item" data-index="${i}">
+                        ${preview}
+                        <span class="file-name">${escapeHtml(file.name)}</span>
+                        <span class="file-remove" onclick="removeNewPupFile(${i})">x</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        window.removeNewPupFile = function(index) {
+            newPupPendingFiles.splice(index, 1);
+            renderNewPupFilePreview();
+        };
 
         async function uploadFiles(files) {
             const fileData = [];
@@ -3045,17 +3125,44 @@
         async function createNewPup() {
             const name = newChatName.value.trim();
             const message = newChatMessage.value.trim();
+            const hasFiles = newPupPendingFiles.length > 0;
 
-            if (!message) {
-                alert('Please enter an initial message');
+            if (!message && !hasFiles) {
+                alert('Please enter an initial message or attach files');
                 return;
             }
 
+            const createBtn = document.getElementById('new-chat-create');
+            createBtn.disabled = true;
+
             try {
+                // Upload files first if any
+                let uploadedFiles = [];
+                let attachmentInfos = [];
+                if (hasFiles) {
+                    try {
+                        uploadedFiles = await uploadFiles(newPupPendingFiles);
+                        attachmentInfos = uploadedFiles.map(f => ({
+                            filename: f.originalName,
+                            filepath: f.filepath,
+                            type: f.type
+                        }));
+                    } catch (err) {
+                        console.error('File upload failed:', err);
+                        alert('Failed to upload files');
+                        createBtn.disabled = false;
+                        return;
+                    }
+                }
+
                 const res = await fetch(`${API_BASE}/agents`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: name || null, message })
+                    body: JSON.stringify({
+                        name: name || null,
+                        message: message || '',
+                        attachments: uploadedFiles.map(f => f.filepath)
+                    })
                 });
 
                 if (!res.ok) {
@@ -3070,7 +3177,8 @@
                 // Initialize messages for new agent
                 chatMessages[newAgent.id] = [{
                     role: 'user',
-                    content: message,
+                    content: message || '(file attachment)',
+                    attachments: attachmentInfos,
                     timestamp: new Date().toISOString()
                 }];
 
@@ -3079,18 +3187,24 @@
             } catch (err) {
                 console.error('Failed to create pup:', err);
                 alert('Failed to create pup');
+            } finally {
+                createBtn.disabled = false;
             }
         }
 
         function showNewChatDialog() {
             newChatName.value = '';
             newChatMessage.value = '';
+            newPupPendingFiles = [];
+            renderNewPupFilePreview();
             newChatDialog.classList.add('active');
             modalOverlay.classList.add('active');
             newChatMessage.focus();
         }
 
         function closeNewChatDialog() {
+            newPupPendingFiles = [];
+            renderNewPupFilePreview();
             newChatDialog.classList.remove('active');
             modalOverlay.classList.remove('active');
         }
