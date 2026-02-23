@@ -16,6 +16,7 @@ const progressFile = path.join(tmpDir, `${agentId}.progress`);
 const outFile = path.join(tmpDir, `${agentId}.out`);
 const doneMarker = path.join(tmpDir, `${agentId}.done`);
 const sessionFile = path.join(tmpDir, `${agentId}.session`);
+const usageFile = path.join(tmpDir, `${agentId}.usage`);
 
 // --- State ---
 let fullText = '';
@@ -121,6 +122,13 @@ process.stdin.on('data', (chunk) => {
                 const finalText = data.result || fullText;
                 fs.writeFileSync(outFile, finalText);
                 fs.writeFileSync(doneMarker, String(data.is_error ? 1 : 0));
+                // Write usage/cost data if present (Claude Code only)
+                if (data.usage || data.total_cost_usd) {
+                    fs.writeFileSync(usageFile, JSON.stringify({
+                        costUsd: data.total_cost_usd || null,
+                        usage: data.usage || null,
+                    }));
+                }
                 process.stdout.write('\n✅ Done\n');
             }
 

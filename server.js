@@ -7,6 +7,7 @@ const historyManager = require('./history');
 const fallbackManager = require('./fallback');
 const skillsManager = require('./skills');
 const securityGuard = require('./security');
+const usageTracker = require('./usage');
 const { exec, execSync } = require('child_process');
 const { writeFileSync, readFileSync, existsSync, mkdirSync, unlinkSync, readdirSync } = require('fs');
 const crypto = require('crypto');
@@ -248,6 +249,11 @@ app.get('/api/backends', async (req, res) => {
         results.push({ ...b, installed: true, version });
     }
     res.json(results);
+});
+
+// REST API: Usage
+app.get('/api/usage', (req, res) => {
+    res.json(usageTracker.getAll());
 });
 
 // REST API: Packs
@@ -716,6 +722,17 @@ function pollAgentOutputForUI(agent, runningFile, progressFile, outFile, doneFil
                 exitCode,
                 cwd: agent.cwd,
             });
+
+            // Record usage/cost data (Claude Code writes .usage file)
+            const usageFile = path.join(TMP_DIR, `${agent.id}.usage`);
+            if (existsSync(usageFile)) {
+                try {
+                    const usageData = JSON.parse(readFileSync(usageFile, 'utf8'));
+                    usageTracker.record(agent.id, agent.name, agent.backend, usageData);
+                    unlinkSync(usageFile);
+                    broadcastToWS({ type: 'usage_update', usage: usageTracker.getAll() });
+                } catch {}
+            }
 
             // Extract session ID from session file (for backends like Codex that generate it)
             const sessionFile = path.join(TMP_DIR, `${agent.id}.session`);
@@ -1231,6 +1248,17 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
             exitCode: parseInt(exitCode, 10),
             cwd: agent.cwd,
         });
+
+        // Record usage/cost data (Claude Code writes .usage file)
+        const usageFile = path.join(TMP_DIR, `${agent.id}.usage`);
+        if (existsSync(usageFile)) {
+            try {
+                const usageData = JSON.parse(readFileSync(usageFile, 'utf8'));
+                usageTracker.record(agent.id, agent.name, agent.backend, usageData);
+                unlinkSync(usageFile);
+                broadcastToWS({ type: 'usage_update', usage: usageTracker.getAll() });
+            } catch {}
+        }
 
         // Check for failure and trigger fallback
         const failure = fallbackManager.detector.classifyFailure(output, exitCode, true);
@@ -2372,6 +2400,9 @@ async function main() {
 
     // Initialize security guard
     securityGuard.initialize();
+
+    // Initialize usage tracker
+    usageTracker.initialize();
 
     // Start Management UI HTTP server immediately (before adapters)
     httpServer.listen(UI_PORT, () => {

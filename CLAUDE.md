@@ -39,6 +39,9 @@ Node.js, whatsapp-web.js, @slack/web-api, @slack/socket-mode, tmux, whisper.cpp 
   - `index.js` — Security guard: screens messages via Claude Code CLI (`claude -p`)
   - `prompt.js` — System prompt for threat classification
   - `logger.js` — Blocked message logging to `.bark-tmp/security.log`
+- `usage/` — Cost and token usage tracking
+  - `index.js` — Usage tracker: record, aggregate, query per-agent costs
+  - `storage.js` — Atomic JSON storage to `.bark-tmp/usage.json`
 - `skills/` — Cross-backend skill system
   - `index.js` — Skills manager (loads once at startup)
   - `parser.js` — SKILL.md parser (YAML frontmatter + markdown)

@@ -410,6 +410,83 @@
         }
 
         /* ═══════════════════════════════════════════════════════════════
+           STATS PANEL
+           ═══════════════════════════════════════════════════════════════ */
+        .stats-summary {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stats-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px 20px;
+            text-align: center;
+        }
+
+        .stats-value {
+            font-size: 2rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .stats-value.phosphor { color: var(--phosphor); }
+        .stats-value.cyan { color: var(--cyan); }
+        .stats-value.amber { color: var(--amber); }
+
+        .stats-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .stats-table th {
+            text-align: left;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 500;
+        }
+
+        .stats-table th:last-child,
+        .stats-table td:last-child {
+            text-align: right;
+        }
+
+        .stats-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-dim);
+        }
+
+        .stats-table tr:hover td {
+            background: var(--bg-hover);
+        }
+
+        .stats-table .stats-cost-cell {
+            color: var(--phosphor);
+            font-weight: 500;
+        }
+
+        .stats-table .stats-muted {
+            color: var(--text-muted);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
            SECTION HEADER
            ═══════════════════════════════════════════════════════════════ */
         .section-header {
@@ -1882,6 +1959,7 @@
             <button class="tab active" data-tab="pups">Pups</button>
             <button class="tab" data-tab="chat">Chat</button>
             <button class="tab" data-tab="admin">Admin</button>
+            <button class="tab" data-tab="stats">Stats</button>
         </div>
 
         <!-- Pups Panel -->
@@ -2072,6 +2150,38 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Stats Panel -->
+        <div class="tab-panel" id="panel-stats">
+            <div class="section-header">
+                <span class="section-title">Usage & Cost</span>
+                <div class="section-line"></div>
+            </div>
+
+            <div class="stats-summary" id="stats-summary">
+                <div class="stats-card">
+                    <div class="stats-value phosphor" id="stats-cost">$0.00</div>
+                    <div class="stats-label">Total Cost</div>
+                </div>
+                <div class="stats-card">
+                    <div class="stats-value cyan" id="stats-tokens">0</div>
+                    <div class="stats-label">Total Tokens</div>
+                </div>
+                <div class="stats-card">
+                    <div class="stats-value amber" id="stats-commands">0</div>
+                    <div class="stats-label">Commands</div>
+                </div>
+            </div>
+
+            <div class="section-header" style="margin-top: 24px;">
+                <span class="section-title">Per Agent</span>
+                <div class="section-line"></div>
+            </div>
+
+            <div id="stats-table-container">
+                <!-- Populated by JS -->
             </div>
         </div>
 
@@ -2371,6 +2481,11 @@
                     packsData = data.packs;
                     renderPacks();
                     break;
+                case 'usage_update':
+                    if (document.querySelector('.tab.active')?.dataset.tab === 'stats') {
+                        renderStats(data.usage);
+                    }
+                    break;
             }
         }
 
@@ -2665,6 +2780,10 @@
                 // Fetch packs when admin tab is opened
                 if (tabName === 'admin') {
                     fetchPacks();
+                }
+                // Fetch usage when stats tab is opened
+                if (tabName === 'stats') {
+                    fetchUsage();
                 }
             });
         });
@@ -3512,6 +3631,83 @@
         setTheme(savedTheme);
 
         themeToggle.addEventListener('click', toggleTheme);
+
+        // ═══════════════════════════════════════════════════════════════
+        // STATS
+        // ═══════════════════════════════════════════════════════════════
+        async function fetchUsage() {
+            try {
+                const res = await fetch(`${API_BASE}/usage`);
+                const data = await res.json();
+                renderStats(data);
+            } catch (err) {
+                console.error('Failed to fetch usage:', err);
+            }
+        }
+
+        function formatCost(usd) {
+            if (!usd || usd === 0) return '$0.00';
+            if (usd < 0.01) return '$' + usd.toFixed(4);
+            return '$' + usd.toFixed(2);
+        }
+
+        function formatTokens(n) {
+            if (!n) return '0';
+            return n.toLocaleString();
+        }
+
+        function renderStats(data) {
+            if (!data) return;
+
+            document.getElementById('stats-cost').textContent = formatCost(data.totals?.costUsd);
+            document.getElementById('stats-tokens').textContent = formatTokens((data.totals?.inputTokens || 0) + (data.totals?.outputTokens || 0));
+            document.getElementById('stats-commands').textContent = formatTokens(data.totals?.turns || 0);
+
+            const container = document.getElementById('stats-table-container');
+            const agentEntries = Object.entries(data.agents || {});
+
+            if (agentEntries.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">\ud83d\udcca</div>
+                        <div class="empty-text">No usage data yet</div>
+                        <div class="empty-hint">Cost tracking starts when Claude Code pups complete commands</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Sort by cost descending
+            agentEntries.sort((a, b) => (b[1].totalCostUsd || 0) - (a[1].totalCostUsd || 0));
+
+            container.innerHTML = `
+                <table class="stats-table">
+                    <thead>
+                        <tr>
+                            <th>Pup</th>
+                            <th>Backend</th>
+                            <th>Commands</th>
+                            <th>Input Tokens</th>
+                            <th>Output Tokens</th>
+                            <th>Cost</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${agentEntries.map(([id, a]) => {
+                            const hasCost = a.backend === 'claude-code' && a.totalCostUsd > 0;
+                            return `<tr>
+                                <td>${a.name}</td>
+                                <td>${a.backend}</td>
+                                <td>${a.turns}</td>
+                                <td>${hasCost ? formatTokens(a.totalInputTokens) : '<span class="stats-muted">\u2014</span>'}</td>
+                                <td>${hasCost ? formatTokens(a.totalOutputTokens) : '<span class="stats-muted">\u2014</span>'}</td>
+                                <td class="${hasCost ? 'stats-cost-cell' : 'stats-muted'}">${hasCost ? formatCost(a.totalCostUsd) : '\u2014'}</td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
 
         // ═══════════════════════════════════════════════════════════════
         // INIT
