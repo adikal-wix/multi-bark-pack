@@ -212,7 +212,7 @@ const wsClients = new Set();
 
 // Serve static files from ui/
 app.use(express.static(path.join(__dirname, 'ui')));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // REST API: Get all agents
 app.get('/api/agents', (req, res) => {
