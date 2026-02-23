@@ -1119,6 +1119,8 @@
             border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
         }
 
         .chat-sidebar-header {
@@ -2206,6 +2208,7 @@
                     break;
                 case 'agent_update':
                     const idx = agents.findIndex(a => a.id === data.agent.id);
+                    const isNewAgent = idx < 0;
                     if (idx >= 0) {
                         agents[idx] = data.agent;
                     } else {
@@ -2213,6 +2216,10 @@
                     }
                     renderAgents();
                     renderChatList();
+                    if (isNewAgent) {
+                        const newItem = document.querySelector(`.chat-item[data-agent-id="${data.agent.id}"]`);
+                        if (newItem) newItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    }
                     if (selectedAgent?.id === data.agent.id) {
                         showModal(data.agent);
                     }
@@ -2821,6 +2828,12 @@
                     selectChatAgent(agentId);
                 });
             });
+
+            // Scroll active item into view
+            const activeItem = document.querySelector('.chat-item.active');
+            if (activeItem) {
+                activeItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
         }
 
         function selectChatAgent(agentId) {
