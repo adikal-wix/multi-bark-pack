@@ -2382,13 +2382,9 @@
         // API
         // ═══════════════════════════════════════════════════════════════
         const API_BASE = '/api';
-        const API_TOKEN = new URLSearchParams(window.location.search).get('token') || '';
 
-        // Authenticated fetch wrapper — merges auth header into all API calls
+        // Fetch wrapper — cookie handles auth automatically
         function apiFetch(url, opts = {}) {
-            if (API_TOKEN) {
-                opts.headers = { ...opts.headers, 'Authorization': `Bearer ${API_TOKEN}` };
-            }
             return fetch(url, opts);
         }
 
@@ -2525,8 +2521,7 @@
         // ═══════════════════════════════════════════════════════════════
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws${API_TOKEN ? '?token=' + encodeURIComponent(API_TOKEN) : ''}`;
-            ws = new WebSocket(wsUrl);
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
             ws.onopen = () => {
                 console.log('WebSocket connected');

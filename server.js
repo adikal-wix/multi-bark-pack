@@ -230,17 +230,92 @@ const httpServer = http.createServer(app);
 const wss = new WebSocket.Server({ noServer: true });
 const wsClients = new Set();
 
-// Serve static files from ui/
-app.use(express.static(path.join(__dirname, 'ui')));
+// Parse cookie value by name from request headers
+function parseCookie(req, name) {
+    const header = req.headers.cookie || '';
+    const match = header.split(';').map(s => s.trim()).find(s => s.startsWith(name + '='));
+    return match ? match.substring(name.length + 1) : null;
+}
+
+// Check if request is authenticated (cookie, bearer token, or query param)
+function isAuthenticated(req) {
+    if (!API_SECRET) return true;
+    const bearer = req.headers?.authorization?.replace(/^Bearer\s+/i, '');
+    if (bearer === API_SECRET) return true;
+    const cookie = typeof req === 'object' && req.headers ? parseCookie(req, 'bark_token') : null;
+    if (cookie === API_SECRET) return true;
+    return false;
+}
+
 app.use(express.json({ limit: '50mb' }));
 
-// API authentication middleware
-app.use('/api', (req, res, next) => {
-    if (!API_SECRET) return next(); // No secret configured — open access
-    const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.query.token;
-    if (token === API_SECRET) return next();
-    res.status(401).json({ error: 'Unauthorized — set API_SECRET in .env and pass via Authorization: Bearer <token>' });
+// Login page
+app.get('/login', (req, res) => {
+    if (!API_SECRET || isAuthenticated(req)) {
+        return res.redirect('/');
+    }
+    res.send(`<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>bark-pack // login</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+body { background: #05080a; color: #c9d1d9; font-family: 'JetBrains Mono', monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+.login-box { background: #0d1117; border: 1px solid #21262d; border-radius: 8px; padding: 40px; width: 320px; text-align: center; }
+h1 { font-size: 18px; color: #00ff41; margin: 0 0 8px 0; }
+p { font-size: 12px; color: #666; margin: 0 0 24px 0; }
+input { width: 100%; padding: 10px 12px; background: #0a0e12; border: 1px solid #21262d; border-radius: 4px; color: #c9d1d9; font-family: inherit; font-size: 14px; box-sizing: border-box; outline: none; }
+input:focus { border-color: #00ff41; }
+button { width: 100%; padding: 10px; margin-top: 16px; background: #00ff41; color: #05080a; border: none; border-radius: 4px; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+button:hover { background: #00cc33; }
+.error { color: #f85149; font-size: 12px; margin-top: 12px; display: none; }
+</style></head><body>
+<div class="login-box">
+<h1>bark-pack</h1>
+<p>mission control</p>
+<form id="f" method="POST" action="/login">
+<input type="password" name="secret" placeholder="API secret" autofocus required>
+<button type="submit">unlock</button>
+</form>
+<div class="error" id="err">wrong secret</div>
+</div>
+<script>
+const p = new URLSearchParams(window.location.search);
+if (p.get('error')) document.getElementById('err').style.display = 'block';
+</script>
+</body></html>`);
 });
+
+// Login POST handler
+app.post('/login', express.urlencoded({ extended: false }), (req, res) => {
+    if (req.body?.secret === API_SECRET) {
+        res.cookie('bark_token', API_SECRET, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 30 * 24 * 60 * 60 * 1000 });
+        return res.redirect('/');
+    }
+    res.redirect('/login?error=1');
+});
+
+// Logout
+app.get('/logout', (req, res) => {
+    res.clearCookie('bark_token', { path: '/' });
+    res.redirect('/login');
+});
+
+// Protect static UI — redirect to login if not authenticated
+app.use((req, res, next) => {
+    if (!API_SECRET) return next();
+    // Allow login-related paths and static assets (favicon, fonts, etc.)
+    if (req.path === '/login' || req.path === '/favicon.svg') return next();
+    if (isAuthenticated(req)) return next();
+    // API calls get 401, browser requests get redirected
+    if (req.path.startsWith('/api')) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    res.redirect('/login');
+});
+
+// Serve static files from ui/
+app.use(express.static(path.join(__dirname, 'ui')));
 
 // REST API: Get all agents
 app.get('/api/agents', (req, res) => {
@@ -934,10 +1009,9 @@ httpServer.on('upgrade', (request, socket, head) => {
         socket.destroy();
         return;
     }
-    // Check API_SECRET if configured
+    // Check API_SECRET if configured (cookie or query param)
     if (API_SECRET) {
-        const token = url.searchParams.get('token');
-        if (token !== API_SECRET) {
+        if (!isAuthenticated(request)) {
             socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
             socket.destroy();
             return;
@@ -2565,12 +2639,9 @@ async function main() {
 
     // Start Management UI HTTP server immediately (before adapters)
     httpServer.listen(UI_PORT, () => {
-        const uiUrl = API_SECRET
-            ? `http://localhost:${UI_PORT}?token=${API_SECRET}`
-            : `http://localhost:${UI_PORT}`;
-        console.log(`Management UI available at ${uiUrl}`);
+        console.log(`Management UI available at http://localhost:${UI_PORT}`);
         if (API_SECRET) {
-            console.log(`  🔒 API authentication enabled`);
+            console.log(`  🔒 API authentication enabled (login at /login)`);
         } else {
             console.log(`  ⚠️  API authentication disabled — set API_SECRET in .env to secure`);
         }
