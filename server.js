@@ -2150,6 +2150,9 @@ async function onMessage(msg) {
                 '`@name msg` — send to pup\n' +
                 'Reply — send to that pup\n' +
                 'New message — spawn new pup\n\n' +
+                '*Delegation:*\n' +
+                'Pups can spawn sub-agents via `bark delegate "task"`\n' +
+                'Add `--branch` for isolated branch + PR\n\n' +
                 '_Dashboard: http://localhost:3333_'
             );
             return;
