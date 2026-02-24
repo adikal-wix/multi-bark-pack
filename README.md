@@ -6,6 +6,29 @@ Multi-platform, multi-backend AI agent swarm. Send a message in WhatsApp, Telegr
 
 > **Platform note:** multi-bark-pack is developed and tested on macOS with Homebrew. Linux should work but paths may differ. Contributions welcome.
 
+## Table of contents
+
+- [Supported Backends](#supported-backends)
+- [How it works](#how-it-works)
+- [Prerequisites](#prerequisites)
+- [Quick start](#quick-start)
+- [Platform setup guides](#platform-setup-guides) — [Telegram](#option-a-telegram-easiest-to-set-up) | [WhatsApp](#option-b-whatsapp) | [Slack](#option-c-slack)
+- [Multiple owners](#multiple-owners)
+- [Using bark-pack](#using-bark-pack)
+  - [Routing](#routing)
+  - [Commands](#commands)
+  - [Backend and model switching](#backend-and-model-switching)
+  - [Voice messages](#voice-messages)
+  - [Name packs](#name-packs)
+  - [Admin UI dashboard](#admin-ui-dashboard)
+  - [Cross-backend skills](#cross-backend-skills)
+  - [Pup delegation](#pup-delegation)
+  - [Security guard](#security-guard)
+  - [Agent fallback](#agent-fallback)
+- [Status indicators](#status-indicators)
+- [Troubleshooting](#troubleshooting)
+- [Project structure](#project-structure)
+
 ## Supported Backends
 
 | Backend | Status | CLI | Session Persistence |
