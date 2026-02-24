@@ -2230,6 +2230,18 @@
                         <button class="filter-chip" data-tl-type="lifecycle">Lifecycle</button>
                     </div>
                 </div>
+                <div class="filter-group">
+                    <span class="filter-label">Pup</span>
+                    <div class="filter-chips" id="timeline-pup-filters">
+                        <button class="filter-chip active" data-tl-pup="all">All</button>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <span class="filter-label">Backend</span>
+                    <div class="filter-chips" id="timeline-backend-filters">
+                        <button class="filter-chip active" data-tl-backend="all">All</button>
+                    </div>
+                </div>
             </div>
 
             <div class="timeline-list" id="timeline-list">
@@ -2577,6 +2589,7 @@
                 case 'timeline_init':
                     timelineEvents = data.events || [];
                     if (document.querySelector('.tab.active')?.dataset.tab === 'timeline') {
+                        renderTimelineFilters();
                         renderTimeline();
                     }
                     break;
@@ -2584,6 +2597,7 @@
                     timelineEvents.push(data.event);
                     if (timelineEvents.length > 500) timelineEvents.shift();
                     if (document.querySelector('.tab.active')?.dataset.tab === 'timeline') {
+                        renderTimelineFilters();
                         renderTimeline();
                     }
                     break;
@@ -2884,6 +2898,7 @@
                 }
                 // Render timeline when timeline tab is opened
                 if (tabName === 'timeline') {
+                    renderTimelineFilters();
                     renderTimeline();
                 }
                 // Fetch usage when stats tab is opened
@@ -3755,6 +3770,8 @@
         };
         let timelineEvents = [];
         let timelineFilter = 'all';
+        let timelinePupFilter = null;
+        let timelineBackendFilter = null;
 
         function formatTimeAgo(isoStr) {
             const diff = Date.now() - new Date(isoStr).getTime();
@@ -3774,6 +3791,41 @@
             return div.innerHTML;
         }
 
+        function renderTimelineFilters() {
+            // Pup filter chips — derive from events
+            const pupNames = [...new Set(timelineEvents.map(e => e.agentName).filter(Boolean))].sort();
+            const pupContainer = document.getElementById('timeline-pup-filters');
+            pupContainer.innerHTML = `<button class="filter-chip ${!timelinePupFilter ? 'active' : ''}" data-tl-pup="all">All</button>` +
+                pupNames.map(name =>
+                    `<button class="filter-chip ${timelinePupFilter === name ? 'active' : ''}" data-tl-pup="${escapeHtml(name)}">${escapeHtml(name)}</button>`
+                ).join('');
+            pupContainer.querySelectorAll('.filter-chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    timelinePupFilter = chip.dataset.tlPup === 'all' ? null : chip.dataset.tlPup;
+                    pupContainer.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+                    chip.classList.add('active');
+                    renderTimeline();
+                });
+            });
+
+            // Backend filter chips — derive from events
+            const backendNames = [...new Set(timelineEvents.map(e => e.backend).filter(Boolean))].sort();
+            const backendContainer = document.getElementById('timeline-backend-filters');
+            const backendLabels = { 'claude-code': 'Claude Code', 'cursor': 'Cursor', 'codex': 'Codex', 'gemini': 'Gemini' };
+            backendContainer.innerHTML = `<button class="filter-chip ${!timelineBackendFilter ? 'active' : ''}" data-tl-backend="all">All</button>` +
+                backendNames.map(name =>
+                    `<button class="filter-chip ${timelineBackendFilter === name ? 'active' : ''}" data-tl-backend="${name}">${backendLabels[name] || name}</button>`
+                ).join('');
+            backendContainer.querySelectorAll('.filter-chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    timelineBackendFilter = chip.dataset.tlBackend === 'all' ? null : chip.dataset.tlBackend;
+                    backendContainer.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+                    chip.classList.add('active');
+                    renderTimeline();
+                });
+            });
+        }
+
         function renderTimeline() {
             const list = document.getElementById('timeline-list');
             const countEl = document.getElementById('timeline-count');
@@ -3781,6 +3833,12 @@
 
             if (timelineFilter !== 'all' && TIMELINE_GROUPS[timelineFilter]) {
                 filtered = filtered.filter(e => TIMELINE_GROUPS[timelineFilter].includes(e.type));
+            }
+            if (timelinePupFilter) {
+                filtered = filtered.filter(e => e.agentName === timelinePupFilter);
+            }
+            if (timelineBackendFilter) {
+                filtered = filtered.filter(e => e.backend === timelineBackendFilter);
             }
 
             countEl.textContent = filtered.length;
@@ -3806,7 +3864,7 @@
             `).join('');
         }
 
-        // Timeline filter chips
+        // Timeline type filter chips
         document.getElementById('timeline-type-filters').addEventListener('click', (e) => {
             const chip = e.target.closest('[data-tl-type]');
             if (!chip) return;

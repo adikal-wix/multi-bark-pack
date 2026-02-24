@@ -1,8 +1,16 @@
-const { readFileSync, writeFileSync, appendFileSync, existsSync, unlinkSync, renameSync } = require('fs');
+const { readFileSync, writeFileSync, appendFileSync, existsSync, unlinkSync, renameSync, statSync } = require('fs');
 const path = require('path');
 
 const TMP_DIR = path.join(__dirname, '..', '.bark-tmp');
 const TIMELINE_FILE = path.join(TMP_DIR, 'timeline.jsonl');
+
+// Rotation config
+const MAX_FILE_SIZE = parseInt(process.env.TIMELINE_MAX_FILE_SIZE, 10) || 5 * 1024 * 1024; // 5MB default
+const MAX_ROTATED_FILES = parseInt(process.env.TIMELINE_MAX_ROTATED_FILES, 10) || 3;
+
+function rotatedPath(n) {
+    return path.join(TMP_DIR, `timeline.${n}.jsonl`);
+}
 
 function load() {
     if (!existsSync(TIMELINE_FILE)) return [];
@@ -27,6 +35,33 @@ function append(event) {
     }
 }
 
+function rotate() {
+    if (!existsSync(TIMELINE_FILE)) return;
+    try {
+        const stats = statSync(TIMELINE_FILE);
+        if (stats.size < MAX_FILE_SIZE) return;
+
+        // Shift existing rotated files: timeline.2.jsonl -> timeline.3.jsonl, etc.
+        // Delete the oldest if at max
+        for (let i = MAX_ROTATED_FILES; i >= 1; i--) {
+            const from = i === 1 ? TIMELINE_FILE : rotatedPath(i - 1);
+            const to = rotatedPath(i);
+            if (i === MAX_ROTATED_FILES) {
+                // Delete the oldest rotated file to make room
+                try { unlinkSync(to); } catch {}
+            }
+            if (existsSync(from)) {
+                renameSync(from, to);
+            }
+        }
+        // TIMELINE_FILE has been renamed to timeline.1.jsonl — create fresh
+        writeFileSync(TIMELINE_FILE, '');
+        console.log(`  📋 Timeline: rotated log (was ${(stats.size / 1024).toFixed(0)}KB)`);
+    } catch (err) {
+        console.log(`  ⚠️ Could not rotate timeline: ${err.message}`);
+    }
+}
+
 function trim(maxLines) {
     if (!existsSync(TIMELINE_FILE)) return;
     try {
@@ -43,6 +78,10 @@ function trim(maxLines) {
 
 function clear() {
     try { unlinkSync(TIMELINE_FILE); } catch {}
+    // Also clean up rotated files
+    for (let i = 1; i <= MAX_ROTATED_FILES; i++) {
+        try { unlinkSync(rotatedPath(i)); } catch {}
+    }
 }
 
-module.exports = { load, append, trim, clear, TIMELINE_FILE };
+module.exports = { load, append, rotate, trim, clear, TIMELINE_FILE };

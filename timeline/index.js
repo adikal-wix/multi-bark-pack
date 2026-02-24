@@ -40,12 +40,13 @@ function initialize({ broadcast }) {
     }
 }
 
-function emit(type, { agentId = null, agentName = null, message = null, meta = null } = {}) {
+function emit(type, { agentId = null, agentName = null, backend = null, message = null, meta = null } = {}) {
     const event = {
         id: 'evt_' + crypto.randomBytes(6).toString('hex'),
         type,
         agentId,
         agentName,
+        backend,
         timestamp: new Date().toISOString(),
         message: message || (MESSAGES[type] ? MESSAGES[type]({ agentName, meta }) : type),
         meta,
@@ -60,6 +61,7 @@ function emit(type, { agentId = null, agentName = null, message = null, meta = n
     appendCount++;
     if (appendCount >= TRIM_INTERVAL) {
         storage.trim(MAX_EVENTS);
+        storage.rotate();
         appendCount = 0;
     }
 
@@ -68,9 +70,11 @@ function emit(type, { agentId = null, agentName = null, message = null, meta = n
     }
 }
 
-function getAll({ limit = 100, offset = 0, agentId = null, eventType = null } = {}) {
+function getAll({ limit = 100, offset = 0, agentId = null, agentName = null, backend = null, eventType = null } = {}) {
     let filtered = events;
     if (agentId) filtered = filtered.filter(e => e.agentId === agentId);
+    if (agentName) filtered = filtered.filter(e => e.agentName === agentName);
+    if (backend) filtered = filtered.filter(e => e.backend === backend);
     if (eventType) filtered = filtered.filter(e => e.type === eventType);
     return filtered.slice(offset, offset + limit);
 }
