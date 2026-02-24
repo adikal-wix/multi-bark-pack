@@ -40,6 +40,7 @@ const WHISPER_MODEL = process.env.WHISPER_MODEL || '/opt/homebrew/share/whisper-
 const DEFAULT_BACKEND = process.env.DEFAULT_BACKEND || 'claude-code';
 const ENABLED_BACKENDS = (process.env.ENABLED_BACKENDS || 'claude-code').split(',').map(s => s.trim());
 const UI_PORT = parseInt(process.env.UI_PORT || '3333', 10);
+const API_SECRET = process.env.API_SECRET || null;
 const SHELL_PATH = process.env.PATH || '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin';
 const cleanEnv = { ...process.env, PATH: `/opt/homebrew/bin:${SHELL_PATH}` };
 delete cleanEnv.CLAUDECODE;
@@ -204,6 +205,17 @@ function nextPupName() {
     return `agent-${crypto.randomBytes(3).toString('hex')}`;
 }
 
+/**
+ * Sanitize agent name to prevent command injection.
+ * Only allows alphanumeric, hyphens, and underscores.
+ * Returns null if the name is empty after sanitization.
+ */
+function sanitizeName(name) {
+    if (!name) return null;
+    const clean = name.replace(/[^a-zA-Z0-9_-]/g, '');
+    return clean || null;
+}
+
 // --- Agent State ---
 const agents = new Map(); // id -> agent object
 const msgToAgent = new Map(); // prefixed msg id -> agent id
@@ -221,6 +233,14 @@ const wsClients = new Set();
 // Serve static files from ui/
 app.use(express.static(path.join(__dirname, 'ui')));
 app.use(express.json({ limit: '50mb' }));
+
+// API authentication middleware
+app.use('/api', (req, res, next) => {
+    if (!API_SECRET) return next(); // No secret configured — open access
+    const token = req.headers.authorization?.replace(/^Bearer\s+/i, '') || req.query.token;
+    if (token === API_SECRET) return next();
+    res.status(401).json({ error: 'Unauthorized — set API_SECRET in .env and pass via Authorization: Bearer <token>' });
+});
 
 // REST API: Get all agents
 app.get('/api/agents', (req, res) => {
@@ -565,7 +585,7 @@ app.post('/api/agents', async (req, res) => {
 
     // Create the agent
     const id = genId();
-    const agentName = name?.trim() || nextPupName();
+    const agentName = sanitizeName(name?.trim()) || nextPupName();
     const backend = backends.get(requestedBackend) || backends.getDefault(DEFAULT_BACKEND);
     const sessionId = backend.generateSessionId();
     const tmuxSession = `bark-${agentName}`;
@@ -909,13 +929,23 @@ function broadcastToWS(data) {
 
 // WebSocket upgrade handling
 httpServer.on('upgrade', (request, socket, head) => {
-    if (request.url === '/ws') {
-        wss.handleUpgrade(request, socket, head, (ws) => {
-            wss.emit('connection', ws, request);
-        });
-    } else {
+    const url = new URL(request.url, `http://${request.headers.host}`);
+    if (url.pathname !== '/ws') {
         socket.destroy();
+        return;
     }
+    // Check API_SECRET if configured
+    if (API_SECRET) {
+        const token = url.searchParams.get('token');
+        if (token !== API_SECRET) {
+            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+            socket.destroy();
+            return;
+        }
+    }
+    wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+    });
 });
 
 wss.on('connection', (ws) => {
@@ -1055,7 +1085,7 @@ async function spawnAgent(prompt, adapter, parentId = null, reuseMsgId = null, r
     }
 
     const id = genId();
-    const name = forceName || nextPupName();
+    const name = sanitizeName(forceName) || nextPupName();
 
     // Get backend (default if not specified)
     const backend = backends.get(backendName) || backends.getDefault(DEFAULT_BACKEND);
@@ -1435,7 +1465,8 @@ function getActiveSubAgents(parentId) {
 
 function setupTmuxEnv(tmuxSession, agentId) {
     try {
-        execSync(`tmux send-keys -t "${tmuxSession}" "export BARK_AGENT_ID='${agentId}' BARK_API='http://localhost:${UI_PORT}' PATH='${TOOLS_DIR}':\"\\$PATH\"" Enter`, EXEC_OPTS);
+        const tokenExport = API_SECRET ? ` BARK_TOKEN='${API_SECRET}'` : '';
+        execSync(`tmux send-keys -t "${tmuxSession}" "export BARK_AGENT_ID='${agentId}' BARK_API='http://localhost:${UI_PORT}'${tokenExport} PATH='${TOOLS_DIR}':\"\\$PATH\"" Enter`, EXEC_OPTS);
     } catch {}
 }
 
@@ -2165,10 +2196,10 @@ async function onMessage(msg) {
             let extraText = '';
 
             if (isNameArg) {
-                const rawName = firstWord.replace(/^@/, '').trim();
+                const rawName = sanitizeName(firstWord.replace(/^@/, '').trim());
                 extraText = parts.slice(1).join(' ').trim();
                 if (!rawName) {
-                    await adapter.send('Usage: `/create @name` — name cannot be empty.');
+                    await adapter.send('Usage: `/create @name` — name must be alphanumeric (a-z, 0-9, hyphens, underscores).');
                     return;
                 }
                 // Normalize casing: use canonical PUP_NAMES casing if it matches, else use input as-is
@@ -2534,7 +2565,15 @@ async function main() {
 
     // Start Management UI HTTP server immediately (before adapters)
     httpServer.listen(UI_PORT, () => {
-        console.log(`Management UI available at http://localhost:${UI_PORT}`);
+        const uiUrl = API_SECRET
+            ? `http://localhost:${UI_PORT}?token=${API_SECRET}`
+            : `http://localhost:${UI_PORT}`;
+        console.log(`Management UI available at ${uiUrl}`);
+        if (API_SECRET) {
+            console.log(`  🔒 API authentication enabled`);
+        } else {
+            console.log(`  ⚠️  API authentication disabled — set API_SECRET in .env to secure`);
+        }
     });
 
     // Clean up stale .running markers from previous session
@@ -2625,6 +2664,7 @@ module.exports = {
     // Utilities
     genId,
     nextPupName,
+    sanitizeName,
     saveState,
     loadState,
     buildStatusText,

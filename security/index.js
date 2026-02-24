@@ -103,8 +103,15 @@ function parseVerdict(output) {
                 reason: reasonMatch ? reasonMatch[1] : 'Message flagged by security',
             };
         }
-        console.log('  \u26a0\ufe0f Security Guard: unparseable response, allowing message');
-        return { allowed: true, category: null, reason: null };
+        console.log('  \u26a0\ufe0f Security Guard: unparseable response, blocking message');
+        logger.logBlocked({
+            text: '(unparseable verdict)',
+            category: 'parse_failure',
+            reason: 'Security guard returned unparseable response — defaulting to deny',
+            latencyMs: 0,
+            timestamp: new Date().toISOString(),
+        });
+        return { allowed: false, category: 'parse_failure', reason: 'Security check returned unparseable response' };
     }
 }
 

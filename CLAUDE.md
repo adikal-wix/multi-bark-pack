@@ -135,7 +135,9 @@ Agents are locked to their backend once spawned. `/reset` keeps the same backend
 
 Context is preserved via rolling summaries + recent turns. History files stored in `.bark-tmp/{id}.history.json`.
 
-**Security Guard:** Optional LLM-based screening for external adapter messages (Telegram, WhatsApp, Slack). Uses Claude Code CLI (`claude -p`) with Haiku to classify messages against 5 threat categories (personal data extraction, destructive commands, prompt injection, fraud, malware). Blocked messages are logged to `.bark-tmp/security.log`. UI messages bypass screening. No API key needed — uses your existing Claude Code subscription. Disabled by default; enable with `SECURITY_GUARD_ENABLED=true`. Fails open by default (CLI errors allow messages through).
+**Security Guard:** Optional LLM-based screening for external adapter messages (Telegram, WhatsApp, Slack). Uses Claude Code CLI (`claude -p`) with Haiku to classify messages against 5 threat categories (personal data extraction, destructive commands, prompt injection, fraud, malware). Blocked messages are logged to `.bark-tmp/security.log`. UI messages bypass screening. No API key needed — uses your existing Claude Code subscription. Disabled by default; enable with `SECURITY_GUARD_ENABLED=true`. Fails open by default (CLI errors allow messages through). Unparseable LLM responses default to deny (blocked).
+
+**API Authentication:** Optional token-based auth for all API endpoints and WebSocket connections. Set `API_SECRET` in `.env` to enable. The server prints the authenticated UI URL at startup. Pups receive the token automatically. When unset, access is open (backward compatible).
 
 **Pup Delegation:** Pups can spawn independent sub-agents using the `bark` CLI tool (`bark delegate "task"` or `bark delegate "task" --branch`). This is "delegate and forget" — the sub-agent works autonomously, appears in chat and the admin UI, and does not report results back to the parent. Sub-agents automatically inherit the parent's context (conversation summary, working directory, modified files). By default (soft mode), the sub-agent works on the same branch. With `--branch`, the sub-agent creates its own branch (`bark/{name}`) and opens a PR when done. Delegation instructions are injected into the system prompt of top-level agents only. Sub-agents cannot delegate further (max depth: 1). Each parent can have at most 3 active sub-agents (`MAX_SUB_AGENTS`). The `parentId` field on the agent object tracks the relationship. When a parent is cleared/deleted, sub-agents continue independently. The status message shows sub-agents with a `↳ParentName` tag. Agent cards in the admin UI show parent and sub-agent names, and sub-agent cards are visually indented. The `bark` CLI helper lives in `tools/bark` and is added to PATH in every tmux session via `BARK_AGENT_ID` and `BARK_API` env vars.
 
@@ -170,6 +172,9 @@ FALLBACK_BACKEND_PRIORITY=claude-code,cursor,codex,gemini
 # Security Guard (uses claude CLI — no API key needed)
 SECURITY_GUARD_ENABLED=true
 SECURITY_GUARD_FAIL_OPEN=true
+
+# API Authentication (optional — open access if unset)
+API_SECRET=your-secret-here
 
 # Pup Delegation
 MAX_DELEGATION_DEPTH=1

@@ -46,9 +46,12 @@ else
 fi
 
 # Call the API
-response=$(curl -s -X POST "${BARK_API}/api/agents" \
-    -H 'Content-Type: application/json' \
-    -d "$payload")
+curl_args=(-s -X POST "${BARK_API}/api/agents" -H 'Content-Type: application/json')
+if [ -n "$BARK_TOKEN" ]; then
+    curl_args+=(-H "Authorization: Bearer ${BARK_TOKEN}")
+fi
+curl_args+=(-d "$payload")
+response=$(curl "${curl_args[@]}")
 
 # Check for errors
 if echo "$response" | grep -q '"error"'; then

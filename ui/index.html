@@ -2382,10 +2382,19 @@
         // API
         // ═══════════════════════════════════════════════════════════════
         const API_BASE = '/api';
+        const API_TOKEN = new URLSearchParams(window.location.search).get('token') || '';
+
+        // Authenticated fetch wrapper — merges auth header into all API calls
+        function apiFetch(url, opts = {}) {
+            if (API_TOKEN) {
+                opts.headers = { ...opts.headers, 'Authorization': `Bearer ${API_TOKEN}` };
+            }
+            return fetch(url, opts);
+        }
 
         async function fetchAgents() {
             try {
-                const res = await fetch(`${API_BASE}/agents`);
+                const res = await apiFetch(`${API_BASE}/agents`);
                 agents = await res.json();
                 renderAgents();
             } catch (err) {
@@ -2395,7 +2404,7 @@
 
         async function fetchBackends() {
             try {
-                const res = await fetch(`${API_BASE}/backends`);
+                const res = await apiFetch(`${API_BASE}/backends`);
                 backends = await res.json();
                 renderBackends();
             } catch (err) {
@@ -2405,7 +2414,7 @@
 
         async function stopAgent(id) {
             try {
-                await fetch(`${API_BASE}/agents/${id}/stop`, { method: 'POST' });
+                await apiFetch(`${API_BASE}/agents/${id}/stop`, { method: 'POST' });
             } catch (err) {
                 console.error('Failed to stop agent:', err);
             }
@@ -2413,7 +2422,7 @@
 
         async function clearAgent(id) {
             try {
-                await fetch(`${API_BASE}/agents/${id}/clear`, { method: 'POST' });
+                await apiFetch(`${API_BASE}/agents/${id}/clear`, { method: 'POST' });
                 closeModal();
             } catch (err) {
                 console.error('Failed to clear agent:', err);
@@ -2422,7 +2431,7 @@
 
         async function deleteAgent(id) {
             try {
-                await fetch(`${API_BASE}/agents/${id}`, { method: 'DELETE' });
+                await apiFetch(`${API_BASE}/agents/${id}`, { method: 'DELETE' });
                 closeModal();
             } catch (err) {
                 console.error('Failed to delete agent:', err);
@@ -2434,7 +2443,7 @@
         // ═══════════════════════════════════════════════════════════════
         async function fetchPacks() {
             try {
-                const res = await fetch(`${API_BASE}/packs`);
+                const res = await apiFetch(`${API_BASE}/packs`);
                 packsData = await res.json();
                 renderPacks();
             } catch (err) {
@@ -2444,7 +2453,7 @@
 
         async function activatePack(packId) {
             try {
-                await fetch(`${API_BASE}/packs/active`, {
+                await apiFetch(`${API_BASE}/packs/active`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ packId })
@@ -2457,7 +2466,7 @@
 
         async function savePack(packId, updates) {
             try {
-                const res = await fetch(`${API_BASE}/packs/${packId}`, {
+                const res = await apiFetch(`${API_BASE}/packs/${packId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(updates)
@@ -2475,7 +2484,7 @@
 
         async function createPack(pack) {
             try {
-                const res = await fetch(`${API_BASE}/packs`, {
+                const res = await apiFetch(`${API_BASE}/packs`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(pack)
@@ -2496,7 +2505,7 @@
 
         async function deletePack(packId) {
             try {
-                const res = await fetch(`${API_BASE}/packs/${packId}`, {
+                const res = await apiFetch(`${API_BASE}/packs/${packId}`, {
                     method: 'DELETE'
                 });
                 if (!res.ok) {
@@ -2516,7 +2525,8 @@
         // ═══════════════════════════════════════════════════════════════
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+            const wsUrl = `${protocol}//${window.location.host}/ws${API_TOKEN ? '?token=' + encodeURIComponent(API_TOKEN) : ''}`;
+            ws = new WebSocket(wsUrl);
 
             ws.onopen = () => {
                 console.log('WebSocket connected');
@@ -3242,7 +3252,7 @@
                 });
             }
 
-            const res = await fetch(`${API_BASE}/upload`, {
+            const res = await apiFetch(`${API_BASE}/upload`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ files: fileData })
@@ -3339,7 +3349,7 @@
 
         async function fetchChatHistory(agentId) {
             try {
-                const res = await fetch(`${API_BASE}/agents/${agentId}/messages`);
+                const res = await apiFetch(`${API_BASE}/agents/${agentId}/messages`);
                 if (res.ok) {
                     const messages = await res.json();
                     chatMessages[agentId] = messages;
@@ -3492,7 +3502,7 @@
             clearPendingFiles();
 
             try {
-                const res = await fetch(`${API_BASE}/agents/${selectedChatAgentId}/message`, {
+                const res = await apiFetch(`${API_BASE}/agents/${selectedChatAgentId}/message`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3546,7 +3556,7 @@
                     }
                 }
 
-                const res = await fetch(`${API_BASE}/agents`, {
+                const res = await apiFetch(`${API_BASE}/agents`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -3888,7 +3898,7 @@
         // ═══════════════════════════════════════════════════════════════
         async function fetchUsage() {
             try {
-                const res = await fetch(`${API_BASE}/usage`);
+                const res = await apiFetch(`${API_BASE}/usage`);
                 const data = await res.json();
                 renderStats(data);
             } catch (err) {
