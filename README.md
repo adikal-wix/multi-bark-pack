@@ -467,13 +467,21 @@ Messages are routed by priority:
 | `/restart` | Restart the server (auto-restarts via start.sh) |
 | `/shutdown` | Shut down the server (no auto-restart) |
 
-### Model switching
+### Backend and model switching
 
-Pups default to Sonnet. Add `#haiku`, `#sonnet`, or `#opus` anywhere in your message to switch:
+Add `#claude-code`, `#cursor`, `#codex`, or `#gemini` to select a backend for a new pup:
+
+```
+#cursor fix this CSS bug                → new pup using Cursor
+#gemini summarize this file             → new pup using Gemini
+```
+
+Add `#haiku`, `#sonnet`, or `#opus` to switch a pup's model:
 
 ```
 #opus build me something complex        → new pup with Opus
 @Chase #haiku quick question             → switches Chase to Haiku
+#cursor #opus fix this bug               → Cursor backend with Opus model
 ```
 
 The model persists for that pup until you change it again.
@@ -506,11 +514,21 @@ bark-pack includes a web dashboard for managing pups and configuration.
 Features:
 - Live agent status with backend indicators
 - Start/stop/clear/delete agents
+- Chat panel — send messages and view conversation history
 - View agent details (session ID, working directory, history)
+- Activity timeline with real-time event feed (filterable by pup, backend, event type)
+- Cost/usage dashboard per agent
 - Manage name packs (view, edit, create custom packs)
 - Backend status overview
+- Parent/sub-agent relationships visible on agent cards
 
-Set `UI_PORT` in `.env` to change the port.
+Set `UI_PORT` in `.env` to change the port. Optionally set `API_SECRET` to require login:
+
+```env
+API_SECRET=your-secret-here
+```
+
+When set, visiting the dashboard shows a login page. The cookie lasts 30 days.
 
 ### Cross-backend skills
 
@@ -533,6 +551,28 @@ Built-in skills:
 | `add-backend` | Scaffold a new LLM backend | 867 |
 
 Skills are stored in `.claude/skills/` as SKILL.md files (YAML frontmatter + markdown). Create custom skills by adding new directories there.
+
+### Pup delegation
+
+Pups can spawn independent sub-agents to handle parallel tasks. This is "delegate and forget" — the sub-agent works autonomously and doesn't report back.
+
+```
+bark delegate "Build the landing page"              # soft — same branch
+bark delegate "Add unit tests" --branch             # isolated branch + PR
+```
+
+Sub-agents automatically inherit their parent's context (conversation summary, working directory, modified files). In **soft mode** (default), the sub-agent works on the same branch with focused commits. In **branch mode**, it creates its own branch (`bark/<name>`) and opens a PR when done.
+
+Guardrails:
+- Max 1 level deep (sub-agents can't delegate further)
+- Max 3 active sub-agents per parent
+- Sub-agents appear in chat, admin UI, and status message (tagged with `↳ParentName`)
+
+Configure via:
+```env
+MAX_DELEGATION_DEPTH=1
+MAX_SUB_AGENTS=3
+```
 
 ### Security guard
 
@@ -696,9 +736,17 @@ multi-bark-pack/
     index.js          Security guard (claude CLI)
     prompt.js         Threat classification prompt
     logger.js         Blocked message logger
+  usage/              Cost and token usage tracking
+    index.js          Usage tracker (per-agent costs)
+    storage.js        Atomic JSON storage
+  timeline/           Activity timeline
+    index.js          Event capture, ring buffer, broadcast
+    storage.js        JSONL append storage with rotation
   skills/             Cross-backend skill system
     index.js          Skills manager (loads at startup)
     parser.js         SKILL.md parser
+  tools/              CLI helpers for pups
+    bark              Delegation CLI (bark delegate)
   .claude/skills/     Skill definitions (SKILL.md files)
   setup-server.js     Setup wizard server (yarn setup)
   setup/              Setup wizard modules
