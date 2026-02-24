@@ -10,6 +10,7 @@ let appendCount = 0;
 
 const MESSAGES = {
     spawn: (e) => `Spawned ${e.agentName}`,
+    delegate: (e) => `${e.meta?.parentName || '?'} delegated to ${e.agentName}`,
     reborn: (e) => `Reborn ${e.agentName}`,
     message_sent: (e) => `Sent to ${e.agentName}: ${(e.meta?.preview || '').substring(0, 60)}`,
     response: (e) => `${e.agentName} responded (${e.meta?.chars || '?'} chars)`,

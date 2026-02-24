@@ -136,6 +136,8 @@ Context is preserved via rolling summaries + recent turns. History files stored 
 
 **Security Guard:** Optional LLM-based screening for external adapter messages (Telegram, WhatsApp, Slack). Uses Claude Code CLI (`claude -p`) with Haiku to classify messages against 5 threat categories (personal data extraction, destructive commands, prompt injection, fraud, malware). Blocked messages are logged to `.bark-tmp/security.log`. UI messages bypass screening. No API key needed — uses your existing Claude Code subscription. Disabled by default; enable with `SECURITY_GUARD_ENABLED=true`. Fails open by default (CLI errors allow messages through).
 
+**Pup Delegation:** Pups can spawn independent sub-agents via `curl localhost:UI_PORT/api/agents` with `parentId` set to their own agent ID. This is "delegate and forget" — the sub-agent works autonomously, appears in chat and the admin UI, and does not report results back to the parent. Delegation instructions are injected into the system prompt of top-level agents only. Sub-agents cannot delegate further (max depth: 1). Each parent can have at most 3 active sub-agents (`MAX_SUB_AGENTS`). The `parentId` field on the agent object tracks the relationship. When a parent is cleared/deleted, sub-agents continue independently. The status message shows sub-agents with a `↳ParentName` tag. Agent cards in the admin UI show parent and sub-agent names, and sub-agent cards are visually indented.
+
 ## Configuration
 
 ```bash
@@ -167,6 +169,10 @@ FALLBACK_BACKEND_PRIORITY=claude-code,cursor,codex,gemini
 # Security Guard (uses claude CLI — no API key needed)
 SECURITY_GUARD_ENABLED=true
 SECURITY_GUARD_FAIL_OPEN=true
+
+# Pup Delegation
+MAX_DELEGATION_DEPTH=1
+MAX_SUB_AGENTS=3
 ```
 
 ## Key constraints

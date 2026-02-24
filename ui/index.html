@@ -627,6 +627,11 @@
             opacity: 1;
         }
 
+        .agent-card.is-sub-agent {
+            border-left: 3px solid var(--text-muted);
+            margin-left: 16px;
+        }
+
         @keyframes progress-pulse {
             0%, 100% { opacity: 0.5; }
             50% { opacity: 1; }
@@ -2758,9 +2763,11 @@
             const statusClass = getStatusClass(agent);
             const statusText = agent.statusText || getDefaultStatusText(agent);
             const packIcon = getPackIcon(agent);
+            const parentAgent = agent.parentId ? agents.find(a => a.id === agent.parentId) : null;
+            const subAgents = agents.filter(a => a.parentId === agent.id && a.status !== 'deleted');
 
             return `
-                <div class="agent-card status-${statusClass}" data-id="${agent.id}">
+                <div class="agent-card status-${statusClass}${agent.parentId ? ' is-sub-agent' : ''}" data-id="${agent.id}">
                     <div class="agent-header">
                         <div class="agent-identity">
                             <span class="agent-status-led ${statusClass}"></span>
@@ -2778,6 +2785,8 @@
                             <span class="agent-meta-label">src:</span>
                             <span>${agent.source}</span>
                         </div>
+                        ${parentAgent ? `<div class="agent-meta-item"><span class="agent-meta-label">parent:</span><span>${escapeHtml(parentAgent.name)}</span></div>` : ''}
+                        ${subAgents.length > 0 ? `<div class="agent-meta-item"><span class="agent-meta-label">subs:</span><span>${subAgents.map(s => escapeHtml(s.name)).join(', ')}</span></div>` : ''}
                     </div>
                     <div class="agent-status-text ${statusClass}">${statusText}</div>
                     <div class="agent-controls">
@@ -3756,14 +3765,14 @@
         // TIMELINE
         // ═══════════════════════════════════════════════════════════════
         const TIMELINE_ICONS = {
-            spawn: '\ud83d\udc15', reborn: '\ud83d\udc15', message_sent: '\ud83d\udce4', response: '\u2705',
+            spawn: '\ud83d\udc15', delegate: '\ud83d\udc15\u200d\ud83e\uddba', reborn: '\ud83d\udc15', message_sent: '\ud83d\udce4', response: '\u2705',
             timeout: '\u23f0', model_switch: '\ud83d\udd04', skill_inject: '\u26a1',
             cwd_change: '\ud83d\udcc2', file_sent: '\ud83d\udcce', stop: '\ud83d\uded1',
             clear: '\ud83d\uddd1\ufe0f', hard_delete: '\u274c', reset: '\ud83d\udd04',
             security_block: '\ud83d\udee1\ufe0f', server: '\ud83d\udce1',
         };
         const TIMELINE_GROUPS = {
-            spawn: ['spawn', 'reborn'],
+            spawn: ['spawn', 'delegate', 'reborn'],
             response: ['response', 'message_sent'],
             error: ['timeout', 'security_block'],
             lifecycle: ['clear', 'hard_delete', 'reset', 'stop', 'model_switch', 'skill_inject', 'cwd_change', 'file_sent', 'server'],

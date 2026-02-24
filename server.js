@@ -53,6 +53,10 @@ const ROUTING_FILE = path.join(__dirname, 'routing.json');
 const STATUS_FILE = path.join(__dirname, 'status.json');
 const PACKS_FILE = path.join(__dirname, 'packs.json');
 
+// --- Delegation limits ---
+const MAX_DELEGATION_DEPTH = parseInt(process.env.MAX_DELEGATION_DEPTH || '1', 10);
+const MAX_SUB_AGENTS = parseInt(process.env.MAX_SUB_AGENTS || '3', 10);
+
 // --- Voice transcription via whisper.cpp (local, free) ---
 function transcribeAudio(audioFilePath) {
     try {
@@ -501,12 +505,33 @@ app.post('/api/agents/:id/message', async (req, res) => {
 
 // REST API: Create new agent
 app.post('/api/agents', async (req, res) => {
-    const { name, message, backend: backendName, model, attachments } = req.body;
+    const { name, message, backend: backendName, model, attachments, parentId } = req.body;
     const hasMessage = message && message.trim();
     const hasAttachments = attachments && Array.isArray(attachments) && attachments.length > 0;
 
     if (!hasMessage && !hasAttachments) {
         return res.status(400).json({ error: 'Initial message or attachments required' });
+    }
+
+    // Validate delegation if parentId provided
+    if (parentId) {
+        const parent = agents.get(parentId);
+        if (!parent) {
+            return res.status(400).json({ error: 'Parent agent not found' });
+        }
+        if (parent.status !== 'active') {
+            return res.status(400).json({ error: 'Parent agent is not active' });
+        }
+        if (parent.parentId) {
+            return res.status(403).json({ error: 'Sub-agents cannot delegate further (max depth reached)' });
+        }
+        const existingSubs = getActiveSubAgents(parentId);
+        if (existingSubs.length >= MAX_SUB_AGENTS) {
+            return res.status(403).json({
+                error: `Parent already has ${MAX_SUB_AGENTS} active sub-agents (max reached)`,
+                existing: existingSubs.map(a => ({ id: a.id, name: a.name })),
+            });
+        }
     }
 
     // Validate backend if specified
@@ -560,9 +585,9 @@ app.post('/api/agents', async (req, res) => {
         backend: backend.name,
         model: requestedModel || backend.defaultModel,
         status: 'active',
-        parentId: null,
+        parentId: parentId || null,
         createdAt: new Date().toISOString(),
-        source: 'ui',
+        source: parentId ? 'delegation' : 'ui',
         packId: packsData.activePack,
         skills: skillsManager.list(true).map(s => s.id),
     };
@@ -571,8 +596,21 @@ app.post('/api/agents', async (req, res) => {
     saveState();
     broadcastAgents();
 
-    console.log(`  🐕 Spawned ${agentName} from UI (tmux: ${tmuxSession})`);
-    timeline.emit('spawn', { agentId: id, agentName, backend: backend.name, meta: { source: 'ui' } });
+    const parentAgent = parentId ? agents.get(parentId) : null;
+    if (parentId) {
+        console.log(`  🐕 Spawned ${agentName} (delegated by ${parentAgent?.name}) (tmux: ${tmuxSession})`);
+        timeline.emit('delegate', { agentId: id, agentName, backend: backend.name, meta: { parentId, parentName: parentAgent?.name } });
+        // Notify chat adapters about the delegation
+        for (const adapter of adapters) {
+            if (adapter.isReady()) {
+                adapter.send(`🐕‍🦺 [${agentName}] spawned by ${parentAgent?.name}`).catch(() => {});
+            }
+        }
+        updatePinnedStatus();
+    } else {
+        console.log(`  🐕 Spawned ${agentName} from UI (tmux: ${tmuxSession})`);
+        timeline.emit('spawn', { agentId: id, agentName, backend: backend.name, meta: { source: 'ui' } });
+    }
 
     // Add attachment context to prompt (same pattern as /api/agents/:id/message)
     let prompt = cleanMessage;
@@ -627,6 +665,11 @@ function runAgentCommandForUI(agent, prompt) {
     // Build system prompt
     const sysPromptFile = path.join(TMP_DIR, `${agent.id}.sysprompt`);
     let systemPrompt = `You are ${agent.name}, a bark-pack pup. All repo work must happen inside ${PROJECTS_DIR}/ — always clone there, even if the repo exists elsewhere on this machine. Reuse existing clones inside ${PROJECTS_DIR}/ (git pull to update). Never reference or modify repos outside of ${PROJECTS_DIR}/. Work on projects using absolute paths from ${PROJECTS_DIR}/ — do NOT cd into them before running commands. When you start working in a project directory, write its absolute path to ${cwdFile} so the server can track it. To send files to the user, copy them to ${sendDir}/. Sign commits with: 🐾 Paw-Printed-By: ${agent.name} <${agent.name.toLowerCase()}@bark-pack>`;
+
+    // Add delegation capability for top-level agents only
+    if (!agent.parentId) {
+        systemPrompt += `\n\n## Delegation\nYou can delegate independent tasks to sub-agents via the bark-pack API. Sub-agents are fully autonomous — they work independently, appear in chat, and you will NOT receive their results back. Use this when a task is clearly separable and can be done in parallel.\n\nTo spawn a sub-agent:\n\`\`\`bash\ncurl -s -X POST http://localhost:${UI_PORT}/api/agents \\\n  -H 'Content-Type: application/json' \\\n  -d '{"message": "YOUR TASK DESCRIPTION", "parentId": "${agent.id}"}'\n\`\`\`\n\nRules:\n- Max ${MAX_SUB_AGENTS} active sub-agents at a time\n- Sub-agents cannot delegate further\n- Include all necessary context in the message (repo URL, branch, requirements)\n- Only delegate clearly independent, well-scoped tasks`;
+    }
 
     // Append skill content if agent has skills (only on first message)
     if (!isResume && agent.skills && agent.skills.length > 0) {
@@ -1097,6 +1140,11 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
     const sysPromptFile = path.join(TMP_DIR, `${agent.id}.sysprompt`);
     let systemPrompt = `You are ${agent.name}, a bark-pack pup. All repo work must happen inside ${PROJECTS_DIR}/ — always clone there, even if the repo exists elsewhere on this machine. Reuse existing clones inside ${PROJECTS_DIR}/ (git pull to update). Never reference or modify repos outside of ${PROJECTS_DIR}/. Work on projects using absolute paths from ${PROJECTS_DIR}/ — do NOT cd into them before running commands. When you start working in a project directory, write its absolute path to ${cwdFile} so the server can track it. To send files to the user, copy them to ${sendDir}/. Sign commits with: 🐾 Paw-Printed-By: ${agent.name} <${agent.name.toLowerCase()}@bark-pack>`;
 
+    // Add delegation capability for top-level agents only
+    if (!agent.parentId) {
+        systemPrompt += `\n\n## Delegation\nYou can delegate independent tasks to sub-agents via the bark-pack API. Sub-agents are fully autonomous — they work independently, appear in chat, and you will NOT receive their results back. Use this when a task is clearly separable and can be done in parallel.\n\nTo spawn a sub-agent:\n\`\`\`bash\ncurl -s -X POST http://localhost:${UI_PORT}/api/agents \\\n  -H 'Content-Type: application/json' \\\n  -d '{"message": "YOUR TASK DESCRIPTION", "parentId": "${agent.id}"}'\n\`\`\`\n\nRules:\n- Max ${MAX_SUB_AGENTS} active sub-agents at a time\n- Sub-agents cannot delegate further\n- Include all necessary context in the message (repo URL, branch, requirements)\n- Only delegate clearly independent, well-scoped tasks`;
+    }
+
     // Append skill content if agent has skills (only on first message)
     if (!isResume && agent.skills && agent.skills.length > 0) {
         const skillContent = skillsManager.buildSkillPrompt(agent.skills);
@@ -1350,6 +1398,10 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
             }
         } catch {}
     }, 2000);
+}
+
+function getActiveSubAgents(parentId) {
+    return [...agents.values()].filter(a => a.parentId === parentId && a.status === 'active');
 }
 
 function findAgentByName(nameQuery) {
@@ -1814,7 +1866,8 @@ function buildStatusText() {
         const backendTag = agent.backend && agent.backend !== DEFAULT_BACKEND ? ` [${agent.backend}]` : '';
         const modelTag = agent.model && agent.model !== 'sonnet' ? ` [${agent.model}]` : '';
         const projectTag = agent.cwd ? ` 📂${path.basename(agent.cwd)}` : '';
-        lines.push(`${emoji} *${agent.name}*${backendTag}${modelTag}${projectTag} ${status}`);
+        const parentTag = agent.parentId ? ` ↳${agents.get(agent.parentId)?.name || '?'}` : '';
+        lines.push(`${emoji} *${agent.name}*${parentTag}${backendTag}${modelTag}${projectTag} ${status}`);
     }
 
     return lines.join('\n');
