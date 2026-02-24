@@ -1,0 +1,62 @@
+#!/bin/bash
+# bark — CLI helper for pup delegation
+# Usage:
+#   bark delegate "task description"            # soft (same branch)
+#   bark delegate "task description" --branch   # isolated branch + PR
+
+set -e
+
+if [ -z "$BARK_AGENT_ID" ] || [ -z "$BARK_API" ]; then
+    echo "Error: BARK_AGENT_ID and BARK_API must be set" >&2
+    exit 1
+fi
+
+cmd="${1:-}"
+shift 2>/dev/null || true
+
+if [ "$cmd" != "delegate" ]; then
+    echo "Usage: bark delegate \"task description\" [--branch]" >&2
+    exit 1
+fi
+
+# Parse args
+message=""
+branch=false
+for arg in "$@"; do
+    case "$arg" in
+        --branch) branch=true ;;
+        *) message="$arg" ;;
+    esac
+done
+
+if [ -z "$message" ]; then
+    echo "Error: task description required" >&2
+    echo "Usage: bark delegate \"task description\" [--branch]" >&2
+    exit 1
+fi
+
+# Escape message for JSON
+json_message=$(printf '%s' "$message" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+
+# Build JSON payload
+if [ "$branch" = true ]; then
+    payload="{\"message\": ${json_message}, \"parentId\": \"${BARK_AGENT_ID}\", \"branch\": true}"
+else
+    payload="{\"message\": ${json_message}, \"parentId\": \"${BARK_AGENT_ID}\"}"
+fi
+
+# Call the API
+response=$(curl -s -X POST "${BARK_API}/api/agents" \
+    -H 'Content-Type: application/json' \
+    -d "$payload")
+
+# Check for errors
+if echo "$response" | grep -q '"error"'; then
+    error=$(echo "$response" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("error","Unknown error"))')
+    echo "Error: $error" >&2
+    exit 1
+fi
+
+# Print success
+name=$(echo "$response" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("name","?"))')
+echo "Delegated to ${name}$([ "$branch" = true ] && echo " (branch: bark/${name})")"

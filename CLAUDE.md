@@ -48,6 +48,7 @@ Node.js, whatsapp-web.js, @slack/web-api, @slack/socket-mode, tmux, whisper.cpp 
 - `skills/` — Cross-backend skill system
   - `index.js` — Skills manager (loads once at startup)
   - `parser.js` — SKILL.md parser (YAML frontmatter + markdown)
+- `tools/bark` — CLI helper for pup delegation (`bark delegate "task"`)
 - `.claude/skills/` — Skill definitions (Claude Code compatible)
 - `start.sh` — Auto-restart wrapper: exits 0 → restarts, non-zero → stops
 - `agents.json` — Runtime state: active + soft-deleted agents (gitignored)
@@ -136,7 +137,7 @@ Context is preserved via rolling summaries + recent turns. History files stored 
 
 **Security Guard:** Optional LLM-based screening for external adapter messages (Telegram, WhatsApp, Slack). Uses Claude Code CLI (`claude -p`) with Haiku to classify messages against 5 threat categories (personal data extraction, destructive commands, prompt injection, fraud, malware). Blocked messages are logged to `.bark-tmp/security.log`. UI messages bypass screening. No API key needed — uses your existing Claude Code subscription. Disabled by default; enable with `SECURITY_GUARD_ENABLED=true`. Fails open by default (CLI errors allow messages through).
 
-**Pup Delegation:** Pups can spawn independent sub-agents via `curl localhost:UI_PORT/api/agents` with `parentId` set to their own agent ID. This is "delegate and forget" — the sub-agent works autonomously, appears in chat and the admin UI, and does not report results back to the parent. Delegation instructions are injected into the system prompt of top-level agents only. Sub-agents cannot delegate further (max depth: 1). Each parent can have at most 3 active sub-agents (`MAX_SUB_AGENTS`). The `parentId` field on the agent object tracks the relationship. When a parent is cleared/deleted, sub-agents continue independently. The status message shows sub-agents with a `↳ParentName` tag. Agent cards in the admin UI show parent and sub-agent names, and sub-agent cards are visually indented.
+**Pup Delegation:** Pups can spawn independent sub-agents using the `bark` CLI tool (`bark delegate "task"` or `bark delegate "task" --branch`). This is "delegate and forget" — the sub-agent works autonomously, appears in chat and the admin UI, and does not report results back to the parent. Sub-agents automatically inherit the parent's context (conversation summary, working directory, modified files). By default (soft mode), the sub-agent works on the same branch. With `--branch`, the sub-agent creates its own branch (`bark/{name}`) and opens a PR when done. Delegation instructions are injected into the system prompt of top-level agents only. Sub-agents cannot delegate further (max depth: 1). Each parent can have at most 3 active sub-agents (`MAX_SUB_AGENTS`). The `parentId` field on the agent object tracks the relationship. When a parent is cleared/deleted, sub-agents continue independently. The status message shows sub-agents with a `↳ParentName` tag. Agent cards in the admin UI show parent and sub-agent names, and sub-agent cards are visually indented. The `bark` CLI helper lives in `tools/bark` and is added to PATH in every tmux session via `BARK_AGENT_ID` and `BARK_API` env vars.
 
 ## Configuration
 

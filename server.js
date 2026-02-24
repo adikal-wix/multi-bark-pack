@@ -56,6 +56,7 @@ const PACKS_FILE = path.join(__dirname, 'packs.json');
 // --- Delegation limits ---
 const MAX_DELEGATION_DEPTH = parseInt(process.env.MAX_DELEGATION_DEPTH || '1', 10);
 const MAX_SUB_AGENTS = parseInt(process.env.MAX_SUB_AGENTS || '3', 10);
+const TOOLS_DIR = path.join(__dirname, 'tools');
 
 // --- Voice transcription via whisper.cpp (local, free) ---
 function transcribeAudio(audioFilePath) {
@@ -505,7 +506,7 @@ app.post('/api/agents/:id/message', async (req, res) => {
 
 // REST API: Create new agent
 app.post('/api/agents', async (req, res) => {
-    const { name, message, backend: backendName, model, attachments, parentId } = req.body;
+    const { name, message, backend: backendName, model, attachments, parentId, branch } = req.body;
     const hasMessage = message && message.trim();
     const hasAttachments = attachments && Array.isArray(attachments) && attachments.length > 0;
 
@@ -569,10 +570,13 @@ app.post('/api/agents', async (req, res) => {
     const sessionId = backend.generateSessionId();
     const tmuxSession = `bark-${agentName}`;
 
-    // Create tmux session
+    // Create tmux session (start in parent's cwd if delegating)
+    const parentCwd = parentId ? agents.get(parentId)?.cwd : null;
+    const startDir = parentCwd && existsSync(parentCwd) ? parentCwd : PROJECTS_DIR;
     try {
-        execSync(`tmux new-session -d -s "${tmuxSession}" -c "${PROJECTS_DIR}"`, EXEC_OPTS);
+        execSync(`tmux new-session -d -s "${tmuxSession}" -c "${startDir}"`, EXEC_OPTS);
         execSync(`tmux send-keys -t "${tmuxSession}" "echo '=== 🐕 ${agentName} (${id}) ==='" Enter`, EXEC_OPTS);
+        setupTmuxEnv(tmuxSession, id);
     } catch (e) {
         console.log(`  ⚠️ Could not create tmux session for ${agentName}: ${e.message}`);
     }
@@ -586,6 +590,7 @@ app.post('/api/agents', async (req, res) => {
         model: requestedModel || backend.defaultModel,
         status: 'active',
         parentId: parentId || null,
+        cwd: parentCwd && existsSync(parentCwd) ? parentCwd : null,
         createdAt: new Date().toISOString(),
         source: parentId ? 'delegation' : 'ui',
         packId: packsData.activePack,
@@ -612,8 +617,29 @@ app.post('/api/agents', async (req, res) => {
         timeline.emit('spawn', { agentId: id, agentName, backend: backend.name, meta: { source: 'ui' } });
     }
 
-    // Add attachment context to prompt (same pattern as /api/agents/:id/message)
+    // Inject parent context for delegated sub-agents
     let prompt = cleanMessage;
+    if (parentId) {
+        const parentCtx = historyManager.getContext(parentId);
+        const ctxParts = [];
+        if (parentCtx.summary) {
+            ctxParts.push(`[Context from ${parentAgent?.name || 'parent'}]\n${parentCtx.summary}`);
+        }
+        if (parentCtx.cwd) {
+            ctxParts.push(`[Working Directory]\n${parentCtx.cwd}`);
+        }
+        if (parentCtx.filesModified?.length > 0) {
+            ctxParts.push(`[Files Modified]\n${parentCtx.filesModified.join('\n')}`);
+        }
+        if (branch) {
+            ctxParts.push(`[Git Instructions]\nYou share a repo with other pups. Create and checkout a new branch: bark/${agentName}. Do all work on this branch. When done, commit and open a PR.`);
+        } else {
+            ctxParts.push(`[Git Instructions]\nYou share a repo with other pups. Be mindful of file conflicts — coordinate through small, focused commits.`);
+        }
+        prompt = ctxParts.join('\n\n') + `\n\n[Delegated Task]\n${prompt}`;
+    }
+
+    // Add attachment context to prompt (same pattern as /api/agents/:id/message)
     const attachmentInfos = [];
     if (hasAttachments) {
         for (const filepath of attachments) {
@@ -668,7 +694,7 @@ function runAgentCommandForUI(agent, prompt) {
 
     // Add delegation capability for top-level agents only
     if (!agent.parentId) {
-        systemPrompt += `\n\n## Delegation\nYou can delegate independent tasks to sub-agents via the bark-pack API. Sub-agents are fully autonomous — they work independently, appear in chat, and you will NOT receive their results back. Use this when a task is clearly separable and can be done in parallel.\n\nTo spawn a sub-agent:\n\`\`\`bash\ncurl -s -X POST http://localhost:${UI_PORT}/api/agents \\\n  -H 'Content-Type: application/json' \\\n  -d '{"message": "YOUR TASK DESCRIPTION", "parentId": "${agent.id}"}'\n\`\`\`\n\nRules:\n- Max ${MAX_SUB_AGENTS} active sub-agents at a time\n- Sub-agents cannot delegate further\n- Include all necessary context in the message (repo URL, branch, requirements)\n- Only delegate clearly independent, well-scoped tasks`;
+        systemPrompt += `\n\n## Delegation\nYou can delegate independent tasks to sub-agents. Sub-agents are fully autonomous — they work independently, appear in chat, and you will NOT receive their results back. Use this when a task is clearly separable and can be done in parallel.\n\nTo spawn a sub-agent:\n\`\`\`bash\nbark delegate "YOUR TASK DESCRIPTION"\n\`\`\`\n\nFor tasks that need isolation (big features, parallel code changes), use --branch to create a separate branch with a PR:\n\`\`\`bash\nbark delegate "YOUR TASK DESCRIPTION" --branch\n\`\`\`\n\nRules:\n- Max ${MAX_SUB_AGENTS} active sub-agents at a time\n- Sub-agents cannot delegate further\n- Include all necessary context in the message (repo URL, branch, requirements)\n- Only delegate clearly independent, well-scoped tasks`;
     }
 
     // Append skill content if agent has skills (only on first message)
@@ -721,6 +747,7 @@ function runAgentCommandForUI(agent, prompt) {
             const startDir = agent.cwd && existsSync(agent.cwd) ? agent.cwd : PROJECTS_DIR;
             execSync(`tmux new-session -d -s "${agent.tmuxSession}" -c "${startDir}"`, EXEC_OPTS);
             execSync(`tmux send-keys -t "${agent.tmuxSession}" "echo '=== 🐕 ${agent.name} (${agent.id}) === (restored)'" Enter`, EXEC_OPTS);
+            setupTmuxEnv(agent.tmuxSession, agent.id);
             console.log(`  🔄 Recreated tmux session for ${agent.name}`);
         } catch (e2) {
             console.error(`  ❌ Could not create tmux session for ${agent.name}: ${e2.message}`);
@@ -1041,6 +1068,7 @@ async function spawnAgent(prompt, adapter, parentId = null, reuseMsgId = null, r
         execSync(`tmux new-session -d -s "${tmuxSession}" -c "${PROJECTS_DIR}"`, EXEC_OPTS);
         // Show a banner
         execSync(`tmux send-keys -t "${tmuxSession}" "echo '=== 🐕 ${name} (${id}) ==='" Enter`, EXEC_OPTS);
+        setupTmuxEnv(tmuxSession, id);
     } catch (e) {
         console.log(`  ⚠️ Could not create tmux session for ${name}: ${e.message}`);
     }
@@ -1142,7 +1170,7 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
 
     // Add delegation capability for top-level agents only
     if (!agent.parentId) {
-        systemPrompt += `\n\n## Delegation\nYou can delegate independent tasks to sub-agents via the bark-pack API. Sub-agents are fully autonomous — they work independently, appear in chat, and you will NOT receive their results back. Use this when a task is clearly separable and can be done in parallel.\n\nTo spawn a sub-agent:\n\`\`\`bash\ncurl -s -X POST http://localhost:${UI_PORT}/api/agents \\\n  -H 'Content-Type: application/json' \\\n  -d '{"message": "YOUR TASK DESCRIPTION", "parentId": "${agent.id}"}'\n\`\`\`\n\nRules:\n- Max ${MAX_SUB_AGENTS} active sub-agents at a time\n- Sub-agents cannot delegate further\n- Include all necessary context in the message (repo URL, branch, requirements)\n- Only delegate clearly independent, well-scoped tasks`;
+        systemPrompt += `\n\n## Delegation\nYou can delegate independent tasks to sub-agents. Sub-agents are fully autonomous — they work independently, appear in chat, and you will NOT receive their results back. Use this when a task is clearly separable and can be done in parallel.\n\nTo spawn a sub-agent:\n\`\`\`bash\nbark delegate "YOUR TASK DESCRIPTION"\n\`\`\`\n\nFor tasks that need isolation (big features, parallel code changes), use --branch to create a separate branch with a PR:\n\`\`\`bash\nbark delegate "YOUR TASK DESCRIPTION" --branch\n\`\`\`\n\nRules:\n- Max ${MAX_SUB_AGENTS} active sub-agents at a time\n- Sub-agents cannot delegate further\n- Include all necessary context in the message (repo URL, branch, requirements)\n- Only delegate clearly independent, well-scoped tasks`;
     }
 
     // Append skill content if agent has skills (only on first message)
@@ -1213,6 +1241,7 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
             const startDir = agent.cwd && existsSync(agent.cwd) ? agent.cwd : PROJECTS_DIR;
             execSync(`tmux new-session -d -s "${agent.tmuxSession}" -c "${startDir}"`, EXEC_OPTS);
             execSync(`tmux send-keys -t "${agent.tmuxSession}" "echo '=== 🐕 ${agent.name} (${agent.id}) === (restored)'" Enter`, EXEC_OPTS);
+            setupTmuxEnv(agent.tmuxSession, agent.id);
             console.log(`  🔄 Restored tmux session for ${agent.name}`);
         } catch (e) {
             console.log(`  ❌ Failed to create tmux session for ${agent.name}: ${e.message}`);
@@ -1404,6 +1433,12 @@ function getActiveSubAgents(parentId) {
     return [...agents.values()].filter(a => a.parentId === parentId && a.status === 'active');
 }
 
+function setupTmuxEnv(tmuxSession, agentId) {
+    try {
+        execSync(`tmux send-keys -t "${tmuxSession}" "export BARK_AGENT_ID='${agentId}' BARK_API='http://localhost:${UI_PORT}' PATH='${TOOLS_DIR}':\"\\$PATH\"" Enter`, EXEC_OPTS);
+    } catch {}
+}
+
 function findAgentByName(nameQuery) {
     const q = nameQuery.toLowerCase();
     for (const [, agent] of agents) {
@@ -1578,6 +1613,7 @@ function rebornAgent(name) {
         const startDir = dead.cwd && existsSync(dead.cwd) ? dead.cwd : PROJECTS_DIR;
         execSync(`tmux new-session -d -s "${dead.tmuxSession}" -c "${startDir}"`, EXEC_OPTS);
         execSync(`tmux send-keys -t "${dead.tmuxSession}" "echo '=== 🐕 ${dead.name} (${dead.id}) === (reborn)'" Enter`, EXEC_OPTS);
+        setupTmuxEnv(dead.tmuxSession, dead.id);
     } catch (e) {
         console.log(`  Could not create tmux session for ${dead.name}: ${e.message}`);
     }
@@ -1723,6 +1759,7 @@ async function runDaily(adapter) {
                 try {
                     const startDir = agent.cwd && existsSync(agent.cwd) ? agent.cwd : PROJECTS_DIR;
                     execSync(`tmux new-session -d -s "${agent.tmuxSession}" -c "${startDir}"`, EXEC_OPTS);
+                    setupTmuxEnv(agent.tmuxSession, agent.id);
                 } catch (e) {
                     console.log(`  ❌ /daily: couldn't reach ${agent.name}: ${e.message}`);
                     done(`${emoji} *${agent.name}*${project} (${status}): _couldn't reach_`);
