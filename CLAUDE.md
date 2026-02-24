@@ -91,6 +91,14 @@ tmux attach -t bark-Chase  # Watch a specific pup work
 - `/restart` — restart the server (auto-restarts via start.sh)
 - `/shutdown` — shut down the server without auto-restarting
 
+Use `pack` instead of name for bulk operations (e.g., `/stop pack`, `/clear pack`, `/delete pack`, `/reset pack`).
+
+**Multi-LLM:** Add `#claude-code`, `#cursor`, `#codex`, or `#gemini` to select backend. Add `#haiku`, `#sonnet`, or `#opus` to select model. Example: `#cursor #opus fix this bug`.
+
+**Routing:** `@name msg` sends to a specific pup. Reply to a pup's message to continue. New messages spawn a new pup.
+
+**Delegation:** Pups can spawn sub-agents via `bark delegate "task"`. Add `--branch` for isolated branch + PR.
+
 ## Architecture
 
 ```
