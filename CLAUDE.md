@@ -50,6 +50,8 @@ Node.js, whatsapp-web.js, @slack/web-api, @slack/socket-mode, tmux, whisper.cpp 
   - `parser.js` — SKILL.md parser (YAML frontmatter + markdown)
 - `tools/bark` — CLI helper for pup delegation (`bark delegate "task"`)
 - `.claude/skills/` — Skill definitions (Claude Code compatible)
+- `prerequisites.sh` — System prerequisites checker/installer (Homebrew, Node, yarn, tmux, Claude CLI, ffmpeg, whisper)
+- `prerequisites-wix.sh` — Wix variant: switches to internal npm registry, then runs prerequisites.sh
 - `start.sh` — Auto-restart wrapper: exits 0 → restarts, non-zero → stops
 - `agents.json` — Runtime state: active + soft-deleted agents (gitignored)
 - `routing.json` — Message ID → agent ID map, all platforms (gitignored)

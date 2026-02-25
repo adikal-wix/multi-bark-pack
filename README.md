@@ -54,7 +54,22 @@ Every new message spawns a new pup. Replies to a pup's message route back to tha
 
 ## Prerequisites
 
-You need these installed on your machine before setting up bark-pack.
+Run the prerequisites script to check and install everything automatically:
+
+```bash
+./prerequisites.sh
+```
+
+**For Wix employees** (uses internal npm registry):
+
+```bash
+./prerequisites-wix.sh
+```
+
+Both scripts check: Homebrew, Node.js 18+, yarn, tmux, Claude Code CLI, ffmpeg, whisper-cpp — and run `yarn install`. Pass `--yes` to auto-accept required installs (for CI).
+
+<details>
+<summary>Manual installation (if you prefer not to use the script)</summary>
 
 ### 1. Node.js (v18 or higher)
 
@@ -148,14 +163,16 @@ brew install ffmpeg whisper-cpp
 
 The default whisper model path is `/opt/homebrew/share/whisper-cpp/models/ggml-base.en.bin`. If yours is elsewhere, you can override it in `.env` (see below).
 
+</details>
+
 ---
 
 ## Quick start
 
 ```bash
 git clone <repo-url>
-cd bark-pack
-yarn install
+cd multi-bark-pack
+./prerequisites.sh    # checks & installs system deps + yarn install
 ```
 
 ### Option 1: Setup Wizard (recommended)
@@ -191,15 +208,6 @@ yarn start
 You only need **one** platform to get started. Pick whichever you already use.
 
 `yarn start` runs `start.sh`, which auto-restarts the server on clean exit (e.g. `/restart` command). A non-zero exit (crash or `/shutdown`) stops for real.
-
-### For Wix employees
-
-If you have access to Wix's internal npm registry, run this before `yarn install`:
-
-```bash
-./scripts/use-wix-registry.sh
-yarn install
-```
 
 ---
 
