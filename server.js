@@ -2139,6 +2139,7 @@ async function onMessage(msg) {
                 '`/losts` — show shelved pups\n' +
                 '`/reborn name` — resurrect shelved pup\n' +
                 '`/daily` — standup from all pups\n' +
+                '`/stats` — usage & cost summary\n' +
                 '`/purge` — delete all shelved pups\n' +
                 '`/restart` `/shutdown` — server control\n' +
                 '_Use `pack` instead of name for all pups_\n\n' +
@@ -2460,6 +2461,85 @@ async function onMessage(msg) {
         }
         if (command === '/daily') {
             await runDaily(adapter);
+            return;
+        }
+        if (command === '/stats') {
+            const usageData = usageTracker.getAll();
+            const arg = body.split(/\s+/).slice(1).join(' ').replace(/^@/, '').trim();
+
+            // Per-pup stats
+            if (arg) {
+                const agent = findAgentByName(arg);
+                if (!agent) {
+                    await adapter.send(`Pup *${arg}* not found.`);
+                    return;
+                }
+                const a = usageData.agents[agent.id];
+                if (!a) {
+                    await adapter.send(`No usage data for *${agent.name}* yet.`);
+                    return;
+                }
+                const est = a.estimated ? ' ≈' : '';
+                const prefix = a.estimated ? '~' : '';
+                const lines = [
+                    `📊 *${agent.name}* Stats`,
+                    `Cost: ${prefix}$${a.totalCostUsd.toFixed(4)}${est}`,
+                    `Turns: ${a.turns}`,
+                    `Tokens: ${a.totalInputTokens.toLocaleString()} in / ${a.totalOutputTokens.toLocaleString()} out`,
+                    `Backend: ${a.backend}`,
+                    `First seen: ${new Date(a.firstSeen).toLocaleDateString()}`,
+                ];
+                await adapter.send(lines.join('\n'));
+                return;
+            }
+
+            // Global stats
+            const t = usageData.totals;
+            if (t.turns === 0) {
+                await adapter.send('📊 No usage data yet.');
+                return;
+            }
+
+            const lines = [
+                `📊 *Pack Stats*`,
+                `Total: $${t.costUsd.toFixed(4)} (${t.turns} turns)`,
+                `Tokens: ${t.inputTokens.toLocaleString()} in / ${t.outputTokens.toLocaleString()} out`,
+            ];
+
+            // By backend
+            const byBackend = {};
+            for (const [, a] of Object.entries(usageData.agents)) {
+                const b = a.backend || 'unknown';
+                if (!byBackend[b]) byBackend[b] = { cost: 0, turns: 0, estimated: false };
+                byBackend[b].cost += a.totalCostUsd;
+                byBackend[b].turns += a.turns;
+                if (a.estimated) byBackend[b].estimated = true;
+            }
+
+            if (Object.keys(byBackend).length > 0) {
+                lines.push('', '*By backend:*');
+                for (const [name, b] of Object.entries(byBackend).sort((a, b) => b[1].cost - a[1].cost)) {
+                    const est = b.estimated ? ' ≈' : '';
+                    const prefix = b.estimated ? '~' : '';
+                    lines.push(`  ${name}: ${prefix}$${b.cost.toFixed(4)} (${b.turns} turns)${est}`);
+                }
+            }
+
+            // Top pups (sorted by cost, max 10)
+            const sortedAgents = Object.entries(usageData.agents)
+                .sort((a, b) => b[1].totalCostUsd - a[1].totalCostUsd)
+                .slice(0, 10);
+
+            if (sortedAgents.length > 0) {
+                lines.push('', '*Top pups:*');
+                for (const [, a] of sortedAgents) {
+                    const est = a.estimated ? ' ≈' : '';
+                    const prefix = a.estimated ? '~' : '';
+                    lines.push(`  ${a.name}: ${prefix}$${a.totalCostUsd.toFixed(4)} (${a.turns} turns)${est}`);
+                }
+            }
+
+            await adapter.send(lines.join('\n'));
             return;
         }
         if (command === '/shutdown') {

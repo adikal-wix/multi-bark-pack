@@ -1,4 +1,5 @@
 const storage = require('./storage');
+const { estimateCost } = require('./pricing');
 
 let data = null;
 
@@ -16,9 +17,19 @@ function record(agentId, agentName, backend, usageData) {
     if (!data) data = storage.load();
     if (!usageData) return;
 
-    const costUsd = usageData.costUsd || 0;
+    let costUsd = usageData.costUsd || 0;
     const inputTokens = usageData.usage?.input_tokens || 0;
     const outputTokens = usageData.usage?.output_tokens || 0;
+    let estimated = false;
+
+    // Estimate cost when backend doesn't report it directly
+    if (!costUsd && usageData.usage) {
+        const est = estimateCost(backend, usageData.usage);
+        if (est) {
+            costUsd = est.costUsd;
+            estimated = true;
+        }
+    }
     const now = new Date().toISOString();
 
     if (!data.agents[agentId]) {
@@ -40,6 +51,7 @@ function record(agentId, agentName, backend, usageData) {
     agent.totalOutputTokens += outputTokens;
     agent.turns++;
     agent.lastSeen = now;
+    if (estimated) agent.estimated = true;
     // Keep name/backend in sync
     agent.name = agentName;
     agent.backend = backend;

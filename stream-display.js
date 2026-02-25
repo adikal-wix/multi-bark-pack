@@ -175,6 +175,13 @@ process.stdin.on('data', (chunk) => {
             if (data.type === 'turn.completed') {
                 fs.writeFileSync(outFile, fullText || '(no output)');
                 fs.writeFileSync(doneMarker, '0');
+                // Write usage data if present (Codex)
+                if (data.usage) {
+                    fs.writeFileSync(usageFile, JSON.stringify({
+                        costUsd: null,
+                        usage: data.usage,
+                    }));
+                }
                 process.stdout.write('\n✅ Done\n');
             }
 
@@ -199,6 +206,16 @@ process.stdin.on('data', (chunk) => {
                 // Gemini result format
                 fs.writeFileSync(outFile, fullText || '(no output)');
                 fs.writeFileSync(doneMarker, data.status === 'success' ? '0' : '1');
+                // Write usage data if present (Gemini)
+                if (data.stats) {
+                    const modelStats = data.stats.models ? Object.values(data.stats.models)[0] : null;
+                    const tokens = modelStats?.tokens;
+                    fs.writeFileSync(usageFile, JSON.stringify({
+                        costUsd: null,
+                        usage: tokens ? { input_tokens: tokens.prompt || 0, output_tokens: tokens.candidates || 0 } : null,
+                        geminiStats: data.stats,
+                    }));
+                }
                 process.stdout.write('\n✅ Done\n');
             }
 

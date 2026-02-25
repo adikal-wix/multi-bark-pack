@@ -90,6 +90,8 @@ tmux attach -t bark-Chase  # Watch a specific pup work
 - `/purge` — permanently delete all shelved pups (frees all names)
 - `/create` — reply to a message to spawn a new pup with that context (optional: add instructions or `@name` to set the pup's name)
 - `/daily` — request a one-line standup from every active pup
+- `/stats` — show usage & cost summary (per-backend, per-pup)
+- `/stats name` — show detailed stats for a specific pup
 - `/help` — show command list
 - `/restart` — restart the server (auto-restarts via start.sh)
 - `/shutdown` — shut down the server without auto-restarting
