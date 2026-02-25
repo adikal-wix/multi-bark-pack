@@ -385,5 +385,5 @@ else
 fi
 echo ""
 echo -e "  Other LLM backends (Cursor, Codex, Gemini):"
-echo -e "    ${BOLD}bash tools/install-backends.sh${NC}"
+echo -e "    ${BOLD}./install-backends.sh${NC}"
 echo ""

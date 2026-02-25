@@ -68,6 +68,12 @@ Run the prerequisites script to check and install everything automatically:
 
 Both scripts check: Homebrew, Node.js 18+, yarn, tmux, Claude Code CLI, ffmpeg, whisper-cpp — and run `yarn install`. Pass `--yes` to auto-accept required installs (for CI).
 
+**Additional LLM backends** (Cursor, Codex, Gemini) — install, authenticate, and auto-configure `.env`:
+
+```bash
+./install-backends.sh
+```
+
 <details>
 <summary>Manual installation (if you prefer not to use the script)</summary>
 
