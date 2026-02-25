@@ -13,6 +13,7 @@ function createWhatsAppAdapter({ groupName }) {
 
     const adapter = {
         name: 'whatsapp',
+        capabilities: { finalMessageBehavior: 'edit' },
 
         async initialize(onMessage) {
             client = new Client({

@@ -30,6 +30,7 @@ function createSlackAdapter({ botToken, appToken, owners }) {
 
     const adapter = {
         name: 'slack',
+        capabilities: { finalMessageBehavior: 'edit' },
 
         async initialize(onMessage) {
             web = new WebClient(botToken);
