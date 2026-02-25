@@ -16,7 +16,7 @@ module.exports = function createCursorBackend(config = {}) {
         // --- Availability ---
         async isInstalled() {
             try {
-                execSync('which agent', EXEC_OPTS);
+                execSync('which cursor-agent', EXEC_OPTS);
                 return true;
             } catch {
                 return false;
@@ -25,7 +25,7 @@ module.exports = function createCursorBackend(config = {}) {
 
         async getVersion() {
             try {
-                const output = execSync('agent --version', EXEC_OPTS);
+                const output = execSync('cursor-agent --version', EXEC_OPTS);
                 return output.trim();
             } catch {
                 return null;
@@ -47,7 +47,7 @@ module.exports = function createCursorBackend(config = {}) {
         generateSessionId() {
             // Cursor uses create-chat to generate session IDs
             try {
-                const output = execSync('agent create-chat', EXEC_OPTS);
+                const output = execSync('cursor-agent create-chat', EXEC_OPTS);
                 return output.trim();
             } catch {
                 // Fallback to UUID if create-chat fails
@@ -78,7 +78,7 @@ module.exports = function createCursorBackend(config = {}) {
             // Note: Cursor doesn't support --system-prompt, so we ignore systemPromptFile
             // The server will prepend system instructions to the first prompt
             let script = '#!/bin/bash\n';
-            script += `cat "${promptFile}" | agent -p -f ${resumeFlag} ${modelFlag} --output-format stream-json --stream-partial-output 2>/dev/null | node "${streamParserScript}" ${agentId} "${tmpDir}"\n`;
+            script += `cat "${promptFile}" | cursor-agent -p -f ${resumeFlag} ${modelFlag} --output-format stream-json --stream-partial-output 2>/dev/null | node "${streamParserScript}" ${agentId} "${tmpDir}"\n`;
 
             return {
                 script,
