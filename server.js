@@ -1215,7 +1215,7 @@ async function spawnAgent(prompt, adapter, parentId = null, reuseMsgId = null, r
     historyManager.addUserTurn(id, prompt);
 
     // Run first prompt, pass the live message ID for editing
-    runAgentCommand(agent, prompt, adapter, liveMsgId);
+    runAgentCommand(agent, prompt, adapter, liveMsgId, replyToId);
 
     return agent;
 }
@@ -1245,11 +1245,11 @@ async function sendToAgent(agent, text, adapter, reuseMsgId = null, replyToId = 
     // Save user turn to history
     historyManager.addUserTurn(agent.id, text);
 
-    runAgentCommand(agent, text, adapter, liveMsgId);
+    runAgentCommand(agent, text, adapter, liveMsgId, replyToId);
     await updatePinnedStatus();
 }
 
-function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
+function runAgentCommand(agent, prompt, adapter, liveMsgId = null, replyToId = null) {
     // Get the backend for this agent
     const backend = backends.get(agent.backend) || backends.getDefault(DEFAULT_BACKEND);
     const icon = getAgentIcon(agent);
@@ -1492,22 +1492,39 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
             ? `${icon} [${agent.name}]:\n\n${output}`
             : `${icon} [${agent.name}] (truncated):\n\n${output.substring(0, maxLen)}...`;
 
-        // Final edit or send new message
-        if (liveMsgId) {
+        // Final: send new message or edit in-place depending on adapter capability
+        let responseMsgId = liveMsgId;
+        if (liveMsgId && adapter.capabilities?.finalMessageBehavior === 'send') {
+            // Mark the thinking bubble as done, then send the result as a new message
+            await adapter.edit(liveMsgId, `${icon} [${agent.name}]: ✅`);
+            const newMsgId = await adapter.send(text, replyToId || liveMsgId);
+            if (newMsgId) {
+                responseMsgId = newMsgId;
+                msgToAgent.set(newMsgId, agent.id);
+                saveState();
+            }
+            console.log(`  ✅ ${agent.name} responded via new msg (${output.length} chars)`);
+        } else if (liveMsgId) {
             const edited = await adapter.edit(liveMsgId, text);
             if (edited) {
                 console.log(`  ✅ ${agent.name} responded (${output.length} chars)`);
             } else {
                 // Edit failed, send new message
                 const newMsgId = await adapter.send(text);
-                msgToAgent.set(newMsgId, agent.id);
-                saveState();
+                if (newMsgId) {
+                    responseMsgId = newMsgId;
+                    msgToAgent.set(newMsgId, agent.id);
+                    saveState();
+                }
                 console.log(`  ✅ ${agent.name} responded via new msg (${output.length} chars)`);
             }
         } else {
             const newMsgId = await adapter.send(text);
-            msgToAgent.set(newMsgId, agent.id);
-            saveState();
+            if (newMsgId) {
+                responseMsgId = newMsgId;
+                msgToAgent.set(newMsgId, agent.id);
+                saveState();
+            }
             console.log(`  ✅ ${agent.name} responded (${output.length} chars)`);
         }
         timeline.emit('response', { agentId: agent.id, agentName: agent.name, backend: agent.backend, meta: { chars: output.length, exitCode: parseInt(exitCode, 10) } });
@@ -1520,7 +1537,7 @@ function runAgentCommand(agent, prompt, adapter, liveMsgId = null) {
                     const filePath = path.join(sendDir, file);
                     try {
                         const caption = `📎 [${agent.name}]: ${file}`;
-                        await adapter.sendFile(filePath, caption, liveMsgId);
+                        await adapter.sendFile(filePath, caption, responseMsgId);
                         console.log(`  📎 ${agent.name} sent file: ${file}`);
                         timeline.emit('file_sent', { agentId: agent.id, agentName: agent.name, backend: agent.backend, meta: { file } });
                     } catch (e) {

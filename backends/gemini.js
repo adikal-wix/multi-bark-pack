@@ -34,8 +34,8 @@ module.exports = function createGeminiBackend(config = {}) {
         },
 
         // --- Models ---
-        models: ['auto-gemini-2.5', 'gemini-2.5-pro', 'gemini-2.5-flash'],
-        defaultModel: 'auto-gemini-2.5',
+        models: ['gemini-2.5-pro', 'gemini-2.5-flash'],
+        defaultModel: 'gemini-2.5-pro',
 
         validateModel(model) {
             // Gemini has many models, be permissive
@@ -74,12 +74,16 @@ module.exports = function createGeminiBackend(config = {}) {
                 script += `export GEMINI_API_KEY="${process.env.GEMINI_API_KEY}"\n`;
             }
 
+            const wrapperScript = require('path').join(__dirname, '../tools/gemini-wrap.js');
+
             if (isResume && sessionId) {
                 // Resume existing session by UUID
-                script += `cat "${promptFile}" | gemini -y --output-format stream-json --resume "${sessionId}" ${modelFlag} 2>/dev/null | node "${streamParserScript}" ${agentId} "${tmpDir}"\n`;
+                // -p "" forces non-interactive mode (process stdin and exit)
+                script += `cat "${promptFile}" | gemini -y -p "" --resume "${sessionId}" ${modelFlag} 2>/dev/null | node "${wrapperScript}" | node "${streamParserScript}" ${agentId} "${tmpDir}"\n`;
             } else {
                 // New session
-                script += `cat "${promptFile}" | gemini -y --output-format stream-json ${modelFlag} 2>/dev/null | node "${streamParserScript}" ${agentId} "${tmpDir}"\n`;
+                // -p "" forces non-interactive mode (process stdin and exit)
+                script += `cat "${promptFile}" | gemini -y -p "" ${modelFlag} 2>/dev/null | node "${wrapperScript}" | node "${streamParserScript}" ${agentId} "${tmpDir}"\n`;
             }
 
             return {

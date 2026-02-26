@@ -114,6 +114,7 @@ function createTelegramAdapter({ token, chatId }) {
     const adapter = {
         name: 'telegram',
         _botInfo: null,
+        capabilities: { finalMessageBehavior: 'send' },
 
         async initialize(onMessage) {
             // Validate token
