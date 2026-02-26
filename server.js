@@ -36,7 +36,7 @@ const OWNER_IDS = {
     telegram: parseOwners(process.env.TG_OWNER),
     slack: parseOwners(process.env.SLACK_OWNER),
 };
-const WHISPER_MODEL = process.env.WHISPER_MODEL || '/opt/homebrew/share/whisper-cpp/models/ggml-base.en.bin';
+const WHISPER_MODEL = process.env.WHISPER_MODEL || '/opt/homebrew/share/whisper-cpp/models/ggml-base.bin';
 const DEFAULT_BACKEND = process.env.DEFAULT_BACKEND || 'claude-code';
 const ENABLED_BACKENDS = (process.env.ENABLED_BACKENDS || 'claude-code').split(',').map(s => s.trim());
 const UI_PORT = parseInt(process.env.UI_PORT || '3333', 10);
@@ -68,7 +68,7 @@ function transcribeAudio(audioFilePath) {
             ...EXEC_OPTS,
             timeout: 15000,
         });
-        const result = execSync(`whisper-cli -m "${WHISPER_MODEL}" --no-timestamps "${wavFile}" 2>/dev/null`, {
+        const result = execSync(`whisper-cli -m "${WHISPER_MODEL}" --language auto --no-timestamps "${wavFile}" 2>/dev/null`, {
             ...EXEC_OPTS,
             timeout: 60000,
         });

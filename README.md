@@ -160,14 +160,22 @@ ENABLED_BACKENDS=claude-code,cursor,codex,gemini
 
 ### 5. ffmpeg + whisper.cpp (optional — for voice messages)
 
-Only needed if you want to send voice messages and have them transcribed to text.
+Only needed if you want to send voice messages and have them transcribed to text. Transcription runs 100% locally — no cloud API, no cost.
 
 ```bash
-# macOS
-brew install ffmpeg whisper-cpp
+# One-liner: installs ffmpeg, whisper-cpp, and downloads the multilingual model
+./install-whisper.sh
 ```
 
-The default whisper model path is `/opt/homebrew/share/whisper-cpp/models/ggml-base.en.bin`. If yours is elsewhere, you can override it in `.env` (see below).
+Or manually:
+```bash
+brew install ffmpeg whisper-cpp
+mkdir -p /opt/homebrew/share/whisper-cpp/models
+curl -L -o /opt/homebrew/share/whisper-cpp/models/ggml-base.bin \
+  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
+```
+
+The default model is `ggml-base.bin` (multilingual — supports Hebrew, English, and 90+ languages with auto-detection). Override the path in `.env` if needed.
 
 </details>
 
@@ -525,7 +533,7 @@ The model persists for that pup until you change it again.
 
 ### Voice messages
 
-Send a voice message in the chat and bark-pack transcribes it locally using whisper.cpp, then routes the text to a pup. Requires ffmpeg and whisper.cpp (see prerequisites).
+Send a voice message in the chat and bark-pack transcribes it locally using whisper.cpp, then routes the text to a pup. Supports **Hebrew, English, and 90+ languages** with automatic language detection. Transcription is 100% local — no cloud API, no cost. Requires ffmpeg and whisper.cpp (see [prerequisites](#prerequisites) or run `./install-whisper.sh`).
 
 ### Name packs
 
@@ -676,13 +684,13 @@ The pinned status message uses these icons:
 
 ## Voice transcription config
 
-Voice messages are transcribed locally — no cloud API, fully private. The default model path assumes macOS + Homebrew:
+Voice messages are transcribed locally — no cloud API, fully private. The default multilingual model supports Hebrew, English, and 90+ languages with automatic language detection.
 
 ```env
-WHISPER_MODEL=/opt/homebrew/share/whisper-cpp/models/ggml-base.en.bin
+WHISPER_MODEL=/opt/homebrew/share/whisper-cpp/models/ggml-base.bin
 ```
 
-Override this in `.env` if your model is elsewhere.
+Override this in `.env` if your model is elsewhere. To install whisper and the model, run `./install-whisper.sh`.
 
 ---
 
