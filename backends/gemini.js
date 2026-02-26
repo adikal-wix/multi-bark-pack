@@ -74,16 +74,14 @@ module.exports = function createGeminiBackend(config = {}) {
                 script += `export GEMINI_API_KEY="${process.env.GEMINI_API_KEY}"\n`;
             }
 
-            const wrapperScript = require('path').join(__dirname, '../tools/gemini-wrap.js');
-
             if (isResume && sessionId) {
                 // Resume existing session by UUID
                 // -p "" forces non-interactive mode (process stdin and exit)
-                script += `cat "${promptFile}" | gemini -y -p "" --resume "${sessionId}" ${modelFlag} 2>/dev/null | node "${wrapperScript}" | node "${streamParserScript}" ${agentId} "${tmpDir}"\n`;
+                script += `cat "${promptFile}" | gemini -y -p "" --output-format stream-json --resume "${sessionId}" ${modelFlag} 2>/dev/null | node "${streamParserScript}" ${agentId} "${tmpDir}"\n`;
             } else {
                 // New session
                 // -p "" forces non-interactive mode (process stdin and exit)
-                script += `cat "${promptFile}" | gemini -y -p "" ${modelFlag} 2>/dev/null | node "${wrapperScript}" | node "${streamParserScript}" ${agentId} "${tmpDir}"\n`;
+                script += `cat "${promptFile}" | gemini -y -p "" --output-format stream-json ${modelFlag} 2>/dev/null | node "${streamParserScript}" ${agentId} "${tmpDir}"\n`;
             }
 
             return {
