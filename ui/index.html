@@ -1277,6 +1277,34 @@
             margin-top: 6px;
         }
 
+        .pack-names-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 8px;
+            padding: 4px 0;
+        }
+
+        .pack-name-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text);
+            white-space: nowrap;
+        }
+
+        .pack-name-chip .chip-icon {
+            font-size: 0.9rem;
+        }
+
         .pack-editor-empty {
             display: flex;
             flex-direction: column;
@@ -2204,6 +2232,7 @@
                                 <label class="pack-field-label">Names (one per line)</label>
                                 <textarea class="pack-field-textarea" id="pack-edit-names" placeholder="Chase&#10;Marshall&#10;Skye&#10;..."></textarea>
                                 <div class="pack-field-hint">Each line is one agent name. <span id="pack-names-count">0</span> names</div>
+                                <div class="pack-names-preview" id="pack-names-preview"></div>
                             </div>
                             <div class="pack-field">
                                 <label class="pack-field-label">Adjectives (one per line)</label>
@@ -2869,8 +2898,9 @@
             packEditNames.value = (pack.names || []).join('\n');
             packEditAdjectives.value = (pack.adjectives || []).join('\n');
 
-            // Update counts
+            // Update counts and names preview
             updatePackCounts();
+            renderNamesPreview(pack);
 
             // Disable fields for builtin packs
             const isBuiltin = pack.builtin;
@@ -2889,6 +2919,17 @@
             const adjectives = packEditAdjectives.value.split('\n').filter(a => a.trim());
             packNamesCount.textContent = names.length;
             packAdjectivesCount.textContent = adjectives.length;
+        }
+
+        function renderNamesPreview(pack) {
+            const preview = document.getElementById('pack-names-preview');
+            const names = (pack.names || []);
+            const icons = pack.icons || [];
+            const fallbackIcon = pack.icon || '🐕';
+            preview.innerHTML = names.map((name, i) => {
+                const icon = icons[i] || fallbackIcon;
+                return `<span class="pack-name-chip"><span class="chip-icon">${icon}</span>${name}</span>`;
+            }).join('');
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -2925,7 +2966,14 @@
         // ═══════════════════════════════════════════════════════════════
         // PACK EDITOR EVENTS
         // ═══════════════════════════════════════════════════════════════
-        packEditNames.addEventListener('input', updatePackCounts);
+        packEditNames.addEventListener('input', () => {
+            updatePackCounts();
+            if (selectedPackId && packsData.packs[selectedPackId]) {
+                const pack = packsData.packs[selectedPackId];
+                const liveNames = packEditNames.value.split('\n').map(n => n.trim()).filter(n => n);
+                renderNamesPreview({ ...pack, names: liveNames });
+            }
+        });
         packEditAdjectives.addEventListener('input', updatePackCounts);
 
         document.getElementById('btn-add-pack').addEventListener('click', async () => {
