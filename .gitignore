@@ -15,5 +15,7 @@ tools-registry.json
 .claude/settings.local.json
 .claude/plans/
 
-# Article drafts (private)
+# Article drafts and media (private)
 docs/linkedin-article-*.md
+docs/screenshots/
+docs/plans/
