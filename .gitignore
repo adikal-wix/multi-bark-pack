@@ -14,3 +14,6 @@ tools-registry.json
 # Claude Code local settings (contains user-specific paths)
 .claude/settings.local.json
 .claude/plans/
+
+# Article drafts (private)
+docs/linkedin-article-*.md
