@@ -20,6 +20,14 @@ export const FAILURE_PATTERNS: Record<string, string[]> = {
     'input too long',
     'exceeds the model',
   ],
+  usageLimit: [
+    "you've hit your limit",
+    'hit your limit',
+    'usage limit',
+    'daily limit',
+    'plan limit',
+    'resets at',
+  ],
   rateLimit: [
     'rate_limit',
     'rate limit exceeded',
@@ -78,6 +86,12 @@ export const FAILURE_INFO: Record<string, FailureInfoEntry> = {
     strategy: 'reset',  // Need new session with compressed context
     retryable: false,
     message: 'Context window full',
+  },
+  usageLimit: {
+    recoverable: true,
+    strategy: 'switch',  // Retrying won't help — limit resets at a fixed time
+    retryable: false,
+    message: 'Usage limit reached',
   },
   rateLimit: {
     recoverable: true,

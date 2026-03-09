@@ -65,7 +65,6 @@ export default function createCursorBackend(_config: Record<string, unknown> = {
       } = opts;
 
       const modelFlag = `--model ${model || this.defaultModel}`;
-      const mcpFlag = mcpConfigFile ? `--mcp-config "${mcpConfigFile}"` : '';
 
       // Cursor uses --resume for both new and continued sessions
       // For new sessions, we pre-create the chat ID with create-chat
@@ -75,7 +74,7 @@ export default function createCursorBackend(_config: Record<string, unknown> = {
 
       let script = '#!/bin/bash\n';
       if (safeCwd) script += `cd "${safeCwd}"\n`;
-      script += `cat "${promptFile}" | cursor-agent -p -f ${resumeFlag} ${modelFlag} ${mcpFlag} --output-format stream-json --stream-partial-output 2>/dev/null | node "${streamParserScript}" ${agentId} "${tmpDir}"\n`;
+      script += `cat "${promptFile}" | cursor-agent -p -f ${resumeFlag} ${modelFlag} --approve-mcps --output-format stream-json --stream-partial-output 2>/dev/null | node "${streamParserScript}" ${agentId} "${tmpDir}"\n`;
 
       return {
         script,

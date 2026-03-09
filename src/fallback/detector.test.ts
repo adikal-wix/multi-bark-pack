@@ -41,6 +41,24 @@ describe('classifyFailure', () => {
     expect(result?.type).toBe('contextWindow');
   });
 
+  it('detects usageLimit from Claude "hit your limit" message', () => {
+    const result = classifyFailure("You've hit your limit · resets 12pm (Asia/Jerusalem)", 1);
+    expect(result?.type).toBe('usageLimit');
+    expect(result?.strategy).toBe('switch');
+    expect(result?.retryable).toBe(false);
+  });
+
+  it('detects usageLimit from "daily limit" message', () => {
+    const result = classifyFailure('daily limit reached, please upgrade', 1);
+    expect(result?.type).toBe('usageLimit');
+    expect(result?.strategy).toBe('switch');
+  });
+
+  it('detects usageLimit from "plan limit" message', () => {
+    const result = classifyFailure('You have exceeded your plan limit', 1);
+    expect(result?.type).toBe('usageLimit');
+  });
+
   it('detects rateLimit patterns', () => {
     const result = classifyFailure('Error: rate_limit exceeded', 1);
     expect(result?.type).toBe('rateLimit');
@@ -105,6 +123,7 @@ describe('classifyFailure', () => {
 
   it('includes correct strategy for each failure type', () => {
     expect(classifyFailure('context window full', 1)?.strategy).toBe('reset');
+    expect(classifyFailure("you've hit your limit", 1)?.strategy).toBe('switch');
     expect(classifyFailure('rate limit hit', 1)?.strategy).toBe('retry');
     expect(classifyFailure('unauthorized', 1)?.strategy).toBe('notify');
     expect(classifyFailure('request timeout', 1)?.strategy).toBe('retry');
@@ -140,6 +159,10 @@ describe('isRecoverable', () => {
     expect(isRecoverable('contextWindow')).toBe(true);
   });
 
+  it('returns true for usageLimit', () => {
+    expect(isRecoverable('usageLimit')).toBe(true);
+  });
+
   it('returns true for rateLimit', () => {
     expect(isRecoverable('rateLimit')).toBe(true);
   });
@@ -156,6 +179,10 @@ describe('isRecoverable', () => {
 describe('getRecommendedStrategy', () => {
   it('returns reset for contextWindow', () => {
     expect(getRecommendedStrategy('contextWindow')).toBe('reset');
+  });
+
+  it('returns switch for usageLimit', () => {
+    expect(getRecommendedStrategy('usageLimit')).toBe('switch');
   });
 
   it('returns retry for rateLimit', () => {

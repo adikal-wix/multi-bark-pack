@@ -43,6 +43,7 @@ export function createWhatsAppAdapter({
   // Cache msg objects for edit/pin (WhatsApp msgs aren't reconstructible from ID)
   // Bounded to WA_MSG_CACHE_MAX entries to prevent memory leaks on long-running servers
   const msgCache = new Map<string, any>();
+  let _activeSends = 0;
 
   const adapter: Adapter = {
     name: 'whatsapp',
@@ -115,11 +116,14 @@ export function createWhatsAppAdapter({
             );
           }
 
-          // Wire up message handler
-          client!.on('message', async (msg: any) => {
+          // Wire up message handler — message_create fires for all
+          // messages including owner phone sends (which arrive as fromMe).
+          // Bot API sends are filtered by checking _activeSends (positive
+          // during sendMessage) or msgCache (for delayed events).
+          client!.on('message_create', async (msg: any) => {
             const chat = await msg.getChat();
             if (!chat.isGroup || chat.name !== groupName) return;
-            if (msg.fromMe) return;
+            if (msg.fromMe && (_activeSends > 0 || msgCache.has(msg.id._serialized))) return;
 
             const contact = await msg.getContact();
             const sender = contact.pushname || contact.number;
@@ -171,6 +175,7 @@ export function createWhatsAppAdapter({
 
     async send(text: string, replyToId?: string | null) {
       if (!groupChat) return null;
+      _activeSends++;
       try {
         const opts: any = {};
         if (replyToId) {
@@ -186,6 +191,8 @@ export function createWhatsAppAdapter({
       } catch (e: unknown) {
         console.log(`  ⚠️ WhatsApp send failed: ${errorMessage(e)}`);
         return null;
+      } finally {
+        _activeSends--;
       }
     },
 
@@ -196,6 +203,7 @@ export function createWhatsAppAdapter({
     ) {
       if (!groupChat)
         throw new Error('WhatsApp not connected to group');
+      _activeSends++;
       try {
         const media = MessageMedia.fromFilePath(filePath);
         const opts: any = {};
@@ -210,6 +218,8 @@ export function createWhatsAppAdapter({
           `  \u26A0\uFE0F WhatsApp sendFile failed: ${errorMessage(e)}`,
         );
         return null;
+      } finally {
+        _activeSends--;
       }
     },
 

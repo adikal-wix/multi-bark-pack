@@ -83,5 +83,15 @@ describe('cursor backend', () => {
       const { script } = backend.buildCommand(baseOpts);
       expect(script).toContain('--output-format stream-json');
     });
+
+    it('does not pass --mcp-config even when mcpConfigFile is provided', () => {
+      const { script } = backend.buildCommand({ ...baseOpts, mcpConfigFile: '/tmp/mcp-config.json' });
+      expect(script).not.toContain('--mcp-config');
+    });
+
+    it('includes --approve-mcps to auto-approve MCP servers', () => {
+      const { script } = backend.buildCommand(baseOpts);
+      expect(script).toContain('--approve-mcps');
+    });
   });
 });

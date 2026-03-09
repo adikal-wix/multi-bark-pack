@@ -54,8 +54,18 @@ export async function executeFallback(
   // Record error in history
   historyManager.recordError(agent.id, failure.type, failure.message);
 
-  // Try strategies in order
+  // Try strategies in order, but skip strategies that precede the
+  // recommended one when they can't help (e.g. skip retry+reset for
+  // usageLimit — the account is exhausted, only switching backend helps).
+  const recommended = failure.strategy;
+  const strategyIndex = config.strategyOrder.indexOf(recommended);
+
   for (const strategy of config.strategyOrder) {
+    if (strategyIndex > config.strategyOrder.indexOf(strategy) && strategy !== recommended) {
+      console.log(`  ⏭️ Skipping ${strategy} for ${agent.name} (recommended: ${recommended})`);
+      continue;
+    }
+
     const result = await tryStrategy(strategy, agent, failure, adapter, backends, resetAgentFn);
 
     if (result.success) {
